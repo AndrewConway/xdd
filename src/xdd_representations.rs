@@ -50,6 +50,22 @@ pub trait XDDBase {
         index.is_true()
     }
 
+    /// Make a node representing the negation of the function represented by the input node. A.k.a. ~ or !.
+    /// TODO support caching of not.
+    fn not_bdd(&mut self,index:NodeIndex) -> NodeIndex {
+        if index.is_true() { NodeIndex::FALSE }
+        else if index.is_false() { NodeIndex::TRUE }
+        else {
+            let node = self.node(index);
+            let newnode = Node {
+                variable: node.variable,
+                lo: self.not_bdd(node.lo),
+                hi: self.not_bdd(node.hi),
+            };
+            self.add_node_if_not_present(newnode)
+        }
+    }
+
     /// Make a node representing index1 and index2 (and in the logical sense, a.k.a. ∧ or &&)
     /// TODO support general ops, and support caching of operations
     fn and_bdd(&mut self,index1:NodeIndex,index2:NodeIndex) -> NodeIndex {
