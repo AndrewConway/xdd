@@ -19,9 +19,27 @@ pub trait XDDBase {
         self.find_node_index(node).unwrap_or_else(||self.add_node(node))
     }
 
-    /// Produce a DD that describes a single variable. That is, a DD that has just that variable leading to TRUE iff variable is true. This has different meanings for a BDD and ZDD.
+    /// Produce a DD that describes a single variable. That is, a DD that has just that variable leading to TRUE iff variable is true.
+    /// * For a BDD, this is a simple function f(v,...)=v.
+    /// * For a ZDD, this means a function f(v,...) = v & !(union of all other variables).
     fn single_variable(&mut self,variable:VariableIndex) -> NodeIndex {
         self.add_node_if_not_present(Node::single_variable(variable))
+    }
+
+    /// Produce a ZDD that describes a single variable. That is, a ZDD that has all variables having no effect other than just that variable leading to TRUE iff variable is true.
+    /// * For a ZDD, this is a simple function f(v,...)=v.
+    /// * This is not a valid BDD.
+    fn single_variable_zdd(&mut self,variable:VariableIndex,total_num_variables:usize) -> NodeIndex {
+        let mut index = NodeIndex::TRUE;
+        for i in (0..total_num_variables).rev() {
+            let v = VariableIndex(i as u16);
+            index = self.add_node_if_not_present(Node{
+                variable : v,
+                lo: if v==variable { NodeIndex::FALSE } else { index },
+                hi: index,
+            });
+        }
+        index
     }
 
     fn print_with_indentation(&self,index:NodeIndex,indentation:usize) {
@@ -50,7 +68,41 @@ pub trait XDDBase {
         index.is_true()
     }
 
-    /// Make a node representing the negation of the function represented by the input node. A.k.a. ~ or !.
+    /// Evaluate as a ZDD with given variables.
+    fn evaluate_zdd(&self,index:NodeIndex,variables:&[bool]) -> bool {
+        let mut up_to_variable = VariableIndex(0);
+        let mut index = index;
+        while !index.is_sink() {
+            let node = self.node(index);
+            while up_to_variable!=node.variable {
+                if variables[up_to_variable.0 as usize] { return false; }
+                else { up_to_variable=VariableIndex(up_to_variable.0+1); }
+            }
+            up_to_variable=VariableIndex(node.variable.0+1);
+            index = if variables[node.variable.0 as usize] {node.hi} else {node.lo}
+        }
+        while (up_to_variable.0 as usize) < variables.len() {
+            if variables[up_to_variable.0 as usize] { return false; }
+            else { up_to_variable=VariableIndex(up_to_variable.0+1); }
+        }
+        index.is_true()
+    }
+/*
+    /// Create a partial ZDD containing a chain of all variables from upto (inclusive) to total_number_variables (exclusive)
+    /// producing true iff at least one variable is true.
+    fn create_zdd_any_variables_below_given_variable_true(&mut self,start_from:VariableIndex,total_number_variables:usize) -> NodeIndex {
+        let mut index = NodeIndex::FALSE;
+        for i in (start_from.0..total_number_variables as u16).rev() {
+            index = self.add_node_if_not_present(Node{
+                variable : VariableIndex(i),
+                lo: index,
+                hi: NodeIndex::TRUE,
+            });
+        }
+        index
+    }
+*/
+    /// Make a node representing the negation of the function represented by the input node interpreted as a BDD. A.k.a. ~ or !.
     /// TODO support caching of not.
     fn not_bdd(&mut self,index:NodeIndex) -> NodeIndex {
         if index.is_true() { NodeIndex::FALSE }
@@ -65,6 +117,40 @@ pub trait XDDBase {
             self.add_node_if_not_present(newnode)
         }
     }
+
+    /// Make a node representing the negation of the function represented by the input node interpreted as a ZDD. A.k.a. ~ or !.
+    /// upto should be be VariableIndex(0) unless you want to ignore variables less than it.
+    /// TODO support caching of not.
+    fn not_zdd(&mut self,index:NodeIndex,upto:VariableIndex,total_number_variables:u16) -> NodeIndex {
+        if index.is_false() { NodeIndex::TRUE }
+        // else if index.is_true() { self.create_zdd_any_variables_below_given_variable_true(upto,total_number_variables) }
+        else {
+            let mut upper_bound = total_number_variables;
+            let mut index = {
+                if index.is_true() { NodeIndex::FALSE }
+                else {
+                    let node = self.node(index);
+                    upper_bound = node.variable.0;
+                    let new_upto = VariableIndex(node.variable.0+1);
+                    let newnode = Node {
+                        variable: node.variable,
+                        lo: self.not_zdd(node.lo,new_upto,total_number_variables),
+                        hi: self.not_zdd(node.hi,new_upto,total_number_variables),
+                    };
+                    self.add_node_if_not_present(newnode)
+                }
+            };
+            for i in (upto.0..upper_bound).rev() {
+                index = self.add_node_if_not_present(Node{
+                    variable : VariableIndex(i),
+                    lo: index,
+                    hi: NodeIndex::TRUE,
+                });
+            }
+            index
+        }
+    }
+
 
     /// Make a node representing index1 and index2 (and in the logical sense, a.k.a. ∧ or &&)
     /// TODO support general ops, and support caching of operations
