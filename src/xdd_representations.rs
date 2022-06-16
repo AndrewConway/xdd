@@ -1,3 +1,4 @@
+
 use std::collections::HashMap;
 use crate::{Node, NodeIndex, VariableIndex};
 
@@ -36,6 +37,23 @@ pub trait XDDBase {
             index = self.add_node_if_not_present(Node{
                 variable : v,
                 lo: if v==variable { NodeIndex::FALSE } else { index },
+                hi: index,
+            });
+        }
+        index
+    }
+
+    /// make a function that is true if starting evaluating a ZDD starting from upto.
+    /// This is a long chain of variables from upto (inclusive) to total_num_variables (exclusive)
+    /// where each elememt points to the next with both hi and lo, and the final field is NodeIndex::TRUE
+    /// TODO cache.
+    fn true_regardless_of_variables_below_zdd(&mut self,upto:VariableIndex,total_num_variables:u16) -> NodeIndex {
+        let mut index = NodeIndex::TRUE;
+        for i in (upto.0..total_num_variables).rev() {
+            let v = VariableIndex(i as u16);
+            index = self.add_node_if_not_present(Node{
+                variable : v,
+                lo: index,
                 hi: index,
             });
         }
@@ -122,33 +140,34 @@ pub trait XDDBase {
     /// upto should be be VariableIndex(0) unless you want to ignore variables less than it.
     /// TODO support caching of not.
     fn not_zdd(&mut self,index:NodeIndex,upto:VariableIndex,total_number_variables:u16) -> NodeIndex {
-        if index.is_false() { NodeIndex::TRUE }
+        println!("not_zdd({},{},{})",index,upto,total_number_variables);
         // else if index.is_true() { self.create_zdd_any_variables_below_given_variable_true(upto,total_number_variables) }
-        else {
-            let mut upper_bound = total_number_variables;
-            let mut index = {
-                if index.is_true() { NodeIndex::FALSE }
-                else {
-                    let node = self.node(index);
-                    upper_bound = node.variable.0;
-                    let new_upto = VariableIndex(node.variable.0+1);
-                    let newnode = Node {
-                        variable: node.variable,
-                        lo: self.not_zdd(node.lo,new_upto,total_number_variables),
-                        hi: self.not_zdd(node.hi,new_upto,total_number_variables),
-                    };
-                    self.add_node_if_not_present(newnode)
-                }
-            };
-            for i in (upto.0..upper_bound).rev() {
-                index = self.add_node_if_not_present(Node{
-                    variable : VariableIndex(i),
-                    lo: index,
-                    hi: NodeIndex::TRUE,
-                });
+        let mut upper_bound = total_number_variables;
+        let mut index = {
+            if index.is_false() { NodeIndex::TRUE }
+            else if index.is_true() { NodeIndex::FALSE }
+            else {
+                let node = self.node(index);
+                upper_bound = node.variable.0;
+                let new_upto = VariableIndex(node.variable.0+1);
+                let newnode = Node {
+                    variable: node.variable,
+                    lo: self.not_zdd(node.lo,new_upto,total_number_variables),
+                    hi: self.not_zdd(node.hi,new_upto,total_number_variables),
+                };
+                if newnode.hi.is_false() { newnode.lo }
+                else { self.add_node_if_not_present(newnode) }
             }
-            index
+        };
+        for i in (upto.0..upper_bound).rev() {
+            let hi = self.true_regardless_of_variables_below_zdd(VariableIndex(i+1),total_number_variables);
+            index = self.add_node_if_not_present(Node{
+                variable : VariableIndex(i),
+                lo: index,
+                hi,
+            });
         }
+        index
     }
 
 
@@ -171,6 +190,76 @@ pub trait XDDBase {
             }
         }
     }
+
+
+    /// compute index as a ZDD anded with NodeIndex::TRUE, which means take all lo branches on index1.
+    fn and_zdd_true(&mut self,index:NodeIndex) -> NodeIndex {
+        let mut index = index;
+        while !index.is_sink() {
+            index = self.node(index).lo;
+        }
+        index
+    }
+
+    /// Make a node representing index1 and index2 (and in the logical sense, a.k.a. ∧ or &&)
+    /// TODO support general ops, and support caching of operations
+    fn and_zdd(&mut self,index1:NodeIndex,index2:NodeIndex) -> NodeIndex {
+        if index1.is_false() || index2.is_false() { NodeIndex::FALSE }
+        else if index1.is_true() { self.and_zdd_true(index2) }
+        else if index2.is_true() { self.and_zdd_true(index1) }
+        else {
+            let node1 = self.node(index1);
+            let node2 = self.node(index2);
+            let (lo1,hi1) = if node1.variable <= node2.variable { (node1.lo,node1.hi)} else {(index1,NodeIndex::FALSE)};
+            let (lo2,hi2) = if node2.variable <= node1.variable { (node2.lo,node2.hi)} else {(index2,NodeIndex::FALSE)};
+            let lo = self.and_zdd(lo1,lo2);
+            let hi = self.and_zdd(hi1,hi2);
+            if hi.is_false() { lo } else {
+                let variable = if node1.variable <= node2.variable { node1.variable } else {node2.variable};
+                self.add_node_if_not_present(Node{variable,lo,hi})
+            }
+        }
+    }
+
+    /// compute index as a ZDD ored with NodeIndex::TRUE, which means or all lo branches on index1.
+    fn or_zdd_true(&mut self,index:NodeIndex) -> NodeIndex {
+        if index.is_sink() { NodeIndex::TRUE }
+        else {
+            let node=self.node(index);
+            let lo = self.or_zdd_true(node.lo);
+            if lo==node.lo { index } // this check is just a (possibly) common path optimization to avoid hash lookup.
+            else {
+                self.add_node_if_not_present(Node{
+                    variable: node.variable,
+                    lo,
+                    hi:node.hi,
+                })
+            }
+        }
+    }
+
+
+    /// Make a node representing index1 and index2 (and in the logical sense, a.k.a. ∧ or &&)
+    /// TODO support general ops, and support caching of operations
+    fn or_zdd(&mut self,index1:NodeIndex,index2:NodeIndex) -> NodeIndex {
+        if index1.is_false() { index2 }
+        else if index2.is_false() { index1 }
+        else if index1.is_true() { self.or_zdd_true(index2) }
+        else if index2.is_true() { self.or_zdd_true(index1) }
+        else {
+            let node1 = self.node(index1);
+            let node2 = self.node(index2);
+            let (lo1,hi1) = if node1.variable <= node2.variable { (node1.lo,node1.hi)} else {(index1,NodeIndex::FALSE)};
+            let (lo2,hi2) = if node2.variable <= node1.variable { (node2.lo,node2.hi)} else {(index2,NodeIndex::FALSE)};
+            let lo = self.or_zdd(lo1,lo2);
+            let hi = self.or_zdd(hi1,hi2);
+            if hi.is_false() { lo } else {
+                let variable = if node1.variable <= node2.variable { node1.variable } else {node2.variable};
+                self.add_node_if_not_present(Node{variable,lo,hi})
+            }
+        }
+    }
+
 }
 
 

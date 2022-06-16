@@ -27,15 +27,42 @@ fn zdd_without_lookup() {
     assert_eq!(v1, v1_duplicate);
     assert_eq!(4, factory.len());
 
+
     let not_v0 = factory.not_zdd(v0,VariableIndex(0),2);
-    assert_eq!(6,factory.len());
-    assert_eq!(true,factory.evaluate_bdd(not_v0,&[false,false]));
-    assert_eq!(false,factory.evaluate_bdd(not_v0,&[true,false]));
-    assert_eq!(true,factory.evaluate_bdd(not_v0,&[false,true]));
-    assert_eq!(false,factory.evaluate_bdd(not_v0,&[true,true]));
+    println!("{}",not_v0);
+    // not_v0 should be just v1?true:true.
+    assert_eq!(4,factory.len());
+    assert!(!not_v0.is_sink());
+    assert_eq!(VariableIndex(1),factory.node(not_v0).variable);
+    assert_eq!(NodeIndex::TRUE,factory.node(not_v0).hi);
+    assert_eq!(NodeIndex::TRUE,factory.node(not_v0).lo);
+    assert_eq!(true,factory.evaluate_zdd(not_v0,&[false,false]));
+    assert_eq!(false,factory.evaluate_zdd(not_v0,&[true,false]));
+    assert_eq!(true,factory.evaluate_zdd(not_v0,&[false,true]));
+    assert_eq!(false,factory.evaluate_zdd(not_v0,&[true,true]));
 
     let not_v0_duplicate = factory.not_zdd(v0,VariableIndex(0),2);
     assert_eq!(not_v0_duplicate,not_v0);
+    assert_eq!(4,factory.len());
+
+    let and_v0_v1 = factory.and_zdd(v0,v1);
+    assert_eq!(5,factory.len());
+    assert_eq!(false,factory.evaluate_zdd(and_v0_v1,&[false,false]));
+    assert_eq!(false,factory.evaluate_zdd(and_v0_v1,&[true,false]));
+    assert_eq!(false,factory.evaluate_zdd(and_v0_v1,&[false,true]));
+    assert_eq!(true,factory.evaluate_zdd(and_v0_v1,&[true,true]));
+    let and_v1_v0 = factory.and_zdd(v1,v0);
+    assert_eq!(and_v0_v1,and_v1_v0);
+    assert_eq!(5,factory.len());
+
+    let or_v0_v1 = factory.or_zdd(v0,v1);
+    assert_eq!(6,factory.len());
+    assert_eq!(false,factory.evaluate_zdd(or_v0_v1,&[false,false]));
+    assert_eq!(true,factory.evaluate_zdd(or_v0_v1,&[true,false]));
+    assert_eq!(true,factory.evaluate_zdd(or_v0_v1,&[false,true]));
+    assert_eq!(true,factory.evaluate_zdd(or_v0_v1,&[true,true]));
+    let or_v1_v0 = factory.or_zdd(v1,v0);
+    assert_eq!(or_v0_v1,or_v1_v0);
     assert_eq!(6,factory.len());
 
 }
