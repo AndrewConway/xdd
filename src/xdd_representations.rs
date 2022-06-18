@@ -1,6 +1,5 @@
 
 use std::collections::HashMap;
-use std::fmt::Debug;
 use crate::{Node, NodeIndex, VariableIndex};
 use crate::generating_function::GeneratingFunction;
 
@@ -275,7 +274,7 @@ pub trait XDDBase {
         for i in 2..length {
             let node = self.node(NodeIndex(i as u32));
             let next_variable = VariableIndex(node.variable.0+1);
-            println!("Computing {} lo={} hi={} variable={}",i+2,node.lo,node.hi,node.variable);
+            //println!("Computing {} lo={} hi={} variable={}",i+2,node.lo,node.hi,node.variable);
             let lo_g = res[node.lo.0 as usize].clone();
             let lo_level = if node.lo.is_sink() { VariableIndex(num_variables) } else { self.node(node.lo).variable };
             //println!("   lo_g={:?}, lo_level={}",lo_g,lo_level);
@@ -286,10 +285,10 @@ pub trait XDDBase {
             //println!("   hi_g={:?}, hi_level={}",hi_g,hi_level);
             let hi = if BDD {hi_g.deal_with_variable_range_being_indeterminate(next_variable,hi_level)} else {hi_g};
             let hi = hi.variable_set(node.variable);
-            println!(" GF lo = {:?},   GF hi = {:?}",lo,hi);
+            //println!(" GF lo = {:?},   GF hi = {:?}",lo,hi);
             res.push(lo.add(hi));
         }
-        println!("{:?}",res);
+        //println!("{:?}",res);
         res
     }
 

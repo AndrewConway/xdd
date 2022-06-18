@@ -1,4 +1,5 @@
 use xdd::{NodeIndex, VariableIndex};
+use xdd::generating_function::SingleVariableGeneratingFunction;
 use xdd::xdd_representations::{NodeList, XDDBase};
 
 
@@ -71,6 +72,15 @@ fn zdd_without_lookup() {
     assert_eq!(2,factory.number_solutions_zdd::<u64>(not_v0,2));
     assert_eq!(1,factory.number_solutions_zdd::<u64>(and_v0_v1,2));
     assert_eq!(3,factory.number_solutions_zdd::<u64>(or_v0_v1,2));
+
+    assert_eq!(SingleVariableGeneratingFunction(vec![1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(NodeIndex::TRUE,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(NodeIndex::FALSE,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(v1,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(v0,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![1,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(not_v0,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,0,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(and_v0_v1,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,2,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(or_v0_v1,2));
+
 }
 
 #[test]
@@ -133,6 +143,15 @@ fn bdd_without_lookup() {
     assert_eq!(1,factory.number_solutions_bdd::<u64>(and_v0_v1,2));
     assert_eq!(3,factory.number_solutions_bdd::<u64>(not_and_v0_v1,2));
     //assert_eq!(3,factory.number_solutions_bdd::<u64>(or_v0_v1,2));
+
+    assert_eq!(SingleVariableGeneratingFunction(vec![1,2,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(NodeIndex::TRUE,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(NodeIndex::FALSE,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(v1,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(v0,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![1,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(not_v0,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,0,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(and_v0_v1,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![1,2]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(not_and_v0_v1,2));
+    //assert_eq!(SingleVariableGeneratingFunction(vec![0,2,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(or_v0_v1,2));
 
 }
 

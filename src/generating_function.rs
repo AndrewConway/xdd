@@ -30,10 +30,40 @@ pub trait GeneratingFunction : Sized + Clone + Debug {
     }
 }
 
-
+/// A simple generating function that separates counts by the number of variables set.
 impl GeneratingFunction for u64 {
     fn zero() -> Self { 0 }
     fn one() -> Self { 1 }
     fn add(self, other: Self) -> Self { self+other }
     fn variable_set(self, _variable: VariableIndex) -> Self { self }
+}
+
+#[derive(Clone,Eq, PartialEq,Debug)]
+pub struct SingleVariableGeneratingFunction(pub Vec<u64>);
+
+impl GeneratingFunction for SingleVariableGeneratingFunction {
+    fn zero() -> Self {
+        SingleVariableGeneratingFunction(vec![])
+    }
+
+    fn one() -> Self {
+        SingleVariableGeneratingFunction(vec![1])
+    }
+
+    fn add(self, other: Self) -> Self {
+        let SingleVariableGeneratingFunction(mut res) = self;
+        let SingleVariableGeneratingFunction(other) = other;
+        for i in 0..other.len() {
+            let v = other[i];
+            if res.len()>i { res[i]+=v } else { res.push(v) }
+        }
+        SingleVariableGeneratingFunction(res)
+    }
+
+    /// shift up by one
+    fn variable_set(self, _variable: VariableIndex) -> Self {
+        let SingleVariableGeneratingFunction(mut res) = self;
+        if res.len()>0 { res.insert(0,0); }
+        SingleVariableGeneratingFunction(res)
+    }
 }
