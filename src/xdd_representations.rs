@@ -1,12 +1,15 @@
 
 use std::collections::HashMap;
+use std::fmt::Debug;
 use crate::{Node, NodeIndex, VariableIndex};
+use crate::generating_function::GeneratingFunction;
 
 /// Functions that any representation of an XDD must have, although some representations
 /// will execute this more quickly than others, at the cost of more memory capacity.
 pub trait XDDBase {
     /// Get the node pointed to by a NodeIndex. panic if it does not exist.
     /// Do NOT call with the two special node indices NodeIndex::TRUE or NodeIndex::FALSE
+    /// Also nodes should be sorted topologically - that is, node(x).hi>x and node(x).lo>x for all x.
     fn node(&self,index:NodeIndex) -> Node;
     /// Get the node index for a node if it is already present.
     fn find_node_index(&self,node:Node) -> Option<NodeIndex>;
@@ -259,6 +262,48 @@ pub trait XDDBase {
             }
         }
     }
+
+
+
+    /// Create generating functions for nodes 0 inclusive to length exclusive.
+    /// This is easy because of the topological sort.
+    /// Return an array such that res[node] = the variable used at the time and the generating function.
+    fn all_number_solutions<G:GeneratingFunction,const BDD:bool>(&self,length:usize,num_variables:u16) -> Vec<G> {
+        let mut res = Vec::new();
+        res.push(G::zero());
+        res.push(G::one());
+        for i in 2..length {
+            let node = self.node(NodeIndex(i as u32));
+            let next_variable = VariableIndex(node.variable.0+1);
+            println!("Computing {} lo={} hi={} variable={}",i+2,node.lo,node.hi,node.variable);
+            let lo_g = res[node.lo.0 as usize].clone();
+            let lo_level = if node.lo.is_sink() { VariableIndex(num_variables) } else { self.node(node.lo).variable };
+            //println!("   lo_g={:?}, lo_level={}",lo_g,lo_level);
+            let lo = if BDD {lo_g.deal_with_variable_range_being_indeterminate(next_variable,lo_level)} else {lo_g};
+            let lo = lo.variable_not_set(node.variable);
+            let hi_g = res[node.hi.0 as usize].clone();
+            let hi_level = if node.hi.is_sink() { VariableIndex(num_variables) } else { self.node(node.hi).variable };
+            //println!("   hi_g={:?}, hi_level={}",hi_g,hi_level);
+            let hi = if BDD {hi_g.deal_with_variable_range_being_indeterminate(next_variable,hi_level)} else {hi_g};
+            let hi = hi.variable_set(node.variable);
+            println!(" GF lo = {:?},   GF hi = {:?}",lo,hi);
+            res.push(lo.add(hi));
+        }
+        println!("{:?}",res);
+        res
+    }
+
+    fn number_solutions<G:GeneratingFunction,const BDD:bool>(&self,index:NodeIndex,num_variables:u16) -> G {
+        let work = self.all_number_solutions::<G,true>(index.0 as usize+1,num_variables);
+        let found = work[index.0 as usize].clone();
+        if BDD {
+            let level = if index.is_sink() { VariableIndex(num_variables) } else { self.node(index).variable };
+            found.deal_with_variable_range_being_indeterminate(VariableIndex(0),level)
+        } else { found }
+    }
+
+    fn number_solutions_bdd<G:GeneratingFunction>(&self,index:NodeIndex,num_variables:u16) -> G { self.number_solutions::<G,true>(index,num_variables) }
+    fn number_solutions_zdd<G:GeneratingFunction>(&self,index:NodeIndex,num_variables:u16) -> G { self.number_solutions::<G,false>(index,num_variables) }
 
 }
 

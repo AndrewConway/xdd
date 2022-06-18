@@ -11,6 +11,7 @@
 //!
 
 pub mod xdd_representations;
+mod generating_function;
 
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};

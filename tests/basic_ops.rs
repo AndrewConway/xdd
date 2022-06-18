@@ -65,6 +65,12 @@ fn zdd_without_lookup() {
     assert_eq!(or_v0_v1,or_v1_v0);
     assert_eq!(6,factory.len());
 
+    // check enumerations
+    assert_eq!(2,factory.number_solutions_zdd::<u64>(v1,2));
+    assert_eq!(2,factory.number_solutions_zdd::<u64>(v0,2));
+    assert_eq!(2,factory.number_solutions_zdd::<u64>(not_v0,2));
+    assert_eq!(1,factory.number_solutions_zdd::<u64>(and_v0_v1,2));
+    assert_eq!(3,factory.number_solutions_zdd::<u64>(or_v0_v1,2));
 }
 
 #[test]
@@ -119,4 +125,14 @@ fn bdd_without_lookup() {
     assert_eq!(NodeIndex::FALSE,factory.and_bdd(not_and_v0_v1,and_v0_v1));
     assert_eq!(NodeIndex::FALSE,factory.and_bdd(v0,not_v0));
     assert_eq!(6,factory.len());
+
+    // check enumerations
+    assert_eq!(2,factory.number_solutions_bdd::<u64>(v1,2));
+    assert_eq!(2,factory.number_solutions_bdd::<u64>(v0,2));
+    assert_eq!(2,factory.number_solutions_bdd::<u64>(not_v0,2));
+    assert_eq!(1,factory.number_solutions_bdd::<u64>(and_v0_v1,2));
+    assert_eq!(3,factory.number_solutions_bdd::<u64>(not_and_v0_v1,2));
+    //assert_eq!(3,factory.number_solutions_bdd::<u64>(or_v0_v1,2));
+
 }
+
