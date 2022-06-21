@@ -13,7 +13,6 @@
 pub mod xdd_representations;
 pub mod generating_function;
 
-use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
 /// The identifier of a variable. Variable 0 is the highest one in the diagram.
@@ -80,6 +79,7 @@ impl Node {
 
 }
 
+/*
 /// A free standing decision tree.
 pub struct FreestandingXDD {
     pub start : NodeIndex,
@@ -95,7 +95,7 @@ pub struct XDDInFactory<'a> {
     start : NodeIndex,
     factory : &'a DDFactory,
 }
-
+*/
 #[cfg(test)]
 mod tests {
     #[test]

@@ -1,11 +1,15 @@
 use xdd::{NodeIndex, VariableIndex};
 use xdd::generating_function::SingleVariableGeneratingFunction;
-use xdd::xdd_representations::{NodeList, XDDBase};
+use xdd::xdd_representations::{NodeList, NodeListWithFastLookup, XDDBase};
 
 
 #[test]
-fn zdd_without_lookup() {
-    let mut factory = NodeList::default();
+fn zdd_without_lookup() { zdd_basic_ops::<NodeList>() }
+#[test]
+fn zdd_with_lookup() { zdd_basic_ops::<NodeListWithFastLookup>() }
+
+fn zdd_basic_ops<F:XDDBase+Default>() {
+    let mut factory = F::default();
     assert_eq!(0, factory.len());
 
     let v0 = factory.single_variable_zdd(VariableIndex(0),2);
@@ -30,7 +34,7 @@ fn zdd_without_lookup() {
 
 
     let not_v0 = factory.not_zdd(v0,VariableIndex(0),2);
-    println!("{}",not_v0);
+    // println!("{}",not_v0);
     // not_v0 should be just v1?true:true.
     assert_eq!(4,factory.len());
     assert!(!not_v0.is_sink());
@@ -84,8 +88,12 @@ fn zdd_without_lookup() {
 }
 
 #[test]
-fn bdd_without_lookup() {
-    let mut factory = NodeList::default();
+fn bdd_without_lookup() { bdd_basic_ops::<NodeList>() }
+#[test]
+fn bdd_with_lookup() { bdd_basic_ops::<NodeListWithFastLookup>() }
+
+fn bdd_basic_ops<F:XDDBase+Default>() {
+    let mut factory = F::default();
     assert_eq!(0,factory.len());
 
     let v0 = factory.single_variable(VariableIndex(0));

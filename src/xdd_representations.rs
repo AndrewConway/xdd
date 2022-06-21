@@ -32,10 +32,10 @@ pub trait XDDBase {
     /// Produce a ZDD that describes a single variable. That is, a ZDD that has all variables having no effect other than just that variable leading to TRUE iff variable is true.
     /// * For a ZDD, this is a simple function f(v,...)=v.
     /// * This is not a valid BDD.
-    fn single_variable_zdd(&mut self,variable:VariableIndex,total_num_variables:usize) -> NodeIndex {
+    fn single_variable_zdd(&mut self,variable:VariableIndex,total_num_variables:u16) -> NodeIndex {
         let mut index = NodeIndex::TRUE;
         for i in (0..total_num_variables).rev() {
-            let v = VariableIndex(i as u16);
+            let v = VariableIndex(i);
             index = self.add_node_if_not_present(Node{
                 variable : v,
                 lo: if v==variable { NodeIndex::FALSE } else { index },
@@ -69,9 +69,8 @@ pub trait XDDBase {
             let node = self.node(index);
             println!("if variable {}",node.variable);
             self.print_with_indentation(node.hi,indentation+1);
-            print!("{: <1$}", "", indentation);
+            println!("{: <1$}else", "", indentation);
             self.print_with_indentation(node.lo,indentation+1);
-            println!("else")
         }
     }
     fn print(&self,index:NodeIndex) {
@@ -142,7 +141,7 @@ pub trait XDDBase {
     /// upto should be be VariableIndex(0) unless you want to ignore variables less than it.
     /// TODO support caching of not.
     fn not_zdd(&mut self,index:NodeIndex,upto:VariableIndex,total_number_variables:u16) -> NodeIndex {
-        println!("not_zdd({},{},{})",index,upto,total_number_variables);
+        //println!("not_zdd({},{},{})",index,upto,total_number_variables);
         // else if index.is_true() { self.create_zdd_any_variables_below_given_variable_true(upto,total_number_variables) }
         let mut upper_bound = total_number_variables;
         let mut index = {
@@ -274,7 +273,7 @@ pub trait XDDBase {
         for i in 2..length {
             let node = self.node(NodeIndex(i as u32));
             let next_variable = VariableIndex(node.variable.0+1);
-            //println!("Computing {} lo={} hi={} variable={}",i+2,node.lo,node.hi,node.variable);
+            //println!("Computing {} lo={} hi={} variable={}",i,node.lo,node.hi,node.variable);
             let lo_g = res[node.lo.0 as usize].clone();
             let lo_level = if node.lo.is_sink() { VariableIndex(num_variables) } else { self.node(node.lo).variable };
             //println!("   lo_g={:?}, lo_level={}",lo_g,lo_level);
@@ -293,7 +292,7 @@ pub trait XDDBase {
     }
 
     fn number_solutions<G:GeneratingFunction,const BDD:bool>(&self,index:NodeIndex,num_variables:u16) -> G {
-        let work = self.all_number_solutions::<G,true>(index.0 as usize+1,num_variables);
+        let work = self.all_number_solutions::<G,BDD>(index.0 as usize+1,num_variables);
         let found = work[index.0 as usize].clone();
         if BDD {
             let level = if index.is_sink() { VariableIndex(num_variables) } else { self.node(index).variable };
