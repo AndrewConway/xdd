@@ -144,11 +144,22 @@ fn bdd_basic_ops<F:XDDBase+Default>() {
     assert_eq!(NodeIndex::FALSE,factory.and_bdd(v0,not_v0));
     assert_eq!(6,factory.len());
 
+    let or_v0_v1 = factory.or_bdd(v0,v1);
+    assert_eq!(7,factory.len());
+    assert_eq!(false,factory.evaluate_bdd(or_v0_v1,&[false,false]));
+    assert_eq!(true,factory.evaluate_bdd(or_v0_v1,&[true,false]));
+    assert_eq!(true,factory.evaluate_bdd(or_v0_v1,&[false,true]));
+    assert_eq!(true,factory.evaluate_bdd(or_v0_v1,&[true,true]));
+    let or_v1_v0 = factory.or_bdd(v1,v0);
+    assert_eq!(or_v0_v1,or_v1_v0);
+    assert_eq!(7,factory.len());
+
     // check enumerations
     assert_eq!(2,factory.number_solutions_bdd::<u64>(v1,2));
     assert_eq!(2,factory.number_solutions_bdd::<u64>(v0,2));
     assert_eq!(2,factory.number_solutions_bdd::<u64>(not_v0,2));
     assert_eq!(1,factory.number_solutions_bdd::<u64>(and_v0_v1,2));
+    assert_eq!(3,factory.number_solutions_bdd::<u64>(or_v0_v1,2));
     assert_eq!(3,factory.number_solutions_bdd::<u64>(not_and_v0_v1,2));
     //assert_eq!(3,factory.number_solutions_bdd::<u64>(or_v0_v1,2));
 

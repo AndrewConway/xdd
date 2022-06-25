@@ -72,5 +72,47 @@ fn count_zdd() {
     //factory.print(function.unwrap());
     let result = factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(function.unwrap(),num_variables);
     println!("{:?}",result);
+    assert_eq!(1,result.0[0]);
+    assert_eq!(1,result.0[1]);
+    assert_eq!(2,result.0[2]);
+    assert_eq!(5,result.0[3]);
+    assert_eq!(13,result.0[4]);
+    assert_eq!(35,result.0[5]);
+    assert_eq!(96,result.0[6]);
+    println!("Used {} nodes",factory.len());
+}
+
+
+#[test]
+fn count_bdd() {
+    let mut factory = NodeListWithFastLookup::default();
+    let terms_wanted = 6;
+    let num_variables = variable_number(0,terms_wanted).0;
+    let mut function : Option<NodeIndex> = None;
+    for x in 0..terms_wanted {
+        for y in 0..(terms_wanted-x) {
+            println!("Working on node ({},{})",x,y);
+            std::io::stdout().flush().unwrap();
+            if x>0 || y>0 {
+                let variable_here = factory.single_variable(variable_number(x,y));
+                let not_variable_here = factory.not_bdd(variable_here);
+                let left = if x>0 { factory.single_variable(variable_number(x-1,y)) } else { NodeIndex::FALSE };
+                let below = if y>0 { factory.single_variable(variable_number(x,y-1)) } else { NodeIndex::FALSE };
+                let prior = factory.or_bdd(left,below);
+                let term = factory.or_bdd(prior,not_variable_here);
+                function = Some(if let Some(f) = function {factory.and_bdd(term,f)} else {term});
+            }
+        }
+    }
+    //factory.print(function.unwrap());
+    let result = factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(function.unwrap(),num_variables);
+    println!("{:?}",result);
+    assert_eq!(1,result.0[0]);
+    assert_eq!(1,result.0[1]);
+    assert_eq!(2,result.0[2]);
+    assert_eq!(5,result.0[3]);
+    assert_eq!(13,result.0[4]);
+    assert_eq!(35,result.0[5]);
+    assert_eq!(96,result.0[6]);
     println!("Used {} nodes",factory.len());
 }

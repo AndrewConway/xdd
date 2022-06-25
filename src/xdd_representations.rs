@@ -178,6 +178,7 @@ pub trait XDDBase {
         if index1.is_false() || index2.is_false() { NodeIndex::FALSE }
         else if index1.is_true() { index2 }
         else if index2.is_true() { index1 }
+        else if index1==index2 { index1 }
         else {
             let node1 = self.node(index1);
             let node2 = self.node(index2);
@@ -185,6 +186,27 @@ pub trait XDDBase {
             let (lo2,hi2) = if node2.variable <= node1.variable { (node2.lo,node2.hi)} else {(index2,index2)};
             let lo = self.and_bdd(lo1,lo2);
             let hi = self.and_bdd(hi1,hi2);
+            if lo==hi { lo } else {
+                let variable = if node1.variable <= node2.variable { node1.variable } else {node2.variable};
+                self.add_node_if_not_present(Node{variable,lo,hi})
+            }
+        }
+    }
+
+    /// Make a node representing index1 and index2 (and in the logical sense, a.k.a. ∧ or &&)
+    /// TODO support general ops, and support caching of operations
+    fn or_bdd(&mut self,index1:NodeIndex,index2:NodeIndex) -> NodeIndex {
+        if index1.is_true() || index2.is_true() { NodeIndex::TRUE }
+        else if index1.is_false() { index2 }
+        else if index2.is_false() { index1 }
+        else if index1==index2 { index1 }
+        else {
+            let node1 = self.node(index1);
+            let node2 = self.node(index2);
+            let (lo1,hi1) = if node1.variable <= node2.variable { (node1.lo,node1.hi)} else {(index1,index1)};
+            let (lo2,hi2) = if node2.variable <= node1.variable { (node2.lo,node2.hi)} else {(index2,index2)};
+            let lo = self.or_bdd(lo1,lo2);
+            let hi = self.or_bdd(hi1,hi2);
             if lo==hi { lo } else {
                 let variable = if node1.variable <= node2.variable { node1.variable } else {node2.variable};
                 self.add_node_if_not_present(Node{variable,lo,hi})
@@ -208,6 +230,7 @@ pub trait XDDBase {
         if index1.is_false() || index2.is_false() { NodeIndex::FALSE }
         else if index1.is_true() { self.and_zdd_true(index2) }
         else if index2.is_true() { self.and_zdd_true(index1) }
+        else if index1==index2 { index1 }
         else {
             let node1 = self.node(index1);
             let node2 = self.node(index2);
@@ -247,6 +270,7 @@ pub trait XDDBase {
         else if index2.is_false() { index1 }
         else if index1.is_true() { self.or_zdd_true(index2) }
         else if index2.is_true() { self.or_zdd_true(index1) }
+        else if index1==index2 { index1 }
         else {
             let node1 = self.node(index1);
             let node2 = self.node(index2);
