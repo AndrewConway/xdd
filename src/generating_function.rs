@@ -67,3 +67,36 @@ impl GeneratingFunction for SingleVariableGeneratingFunction {
         SingleVariableGeneratingFunction(res)
     }
 }
+
+
+#[derive(Clone,Eq, PartialEq,Debug)]
+/// a generating function with a fixed maximum length
+pub struct SingleVariableGeneratingFunctionFixedLength<const L:usize>(pub Vec<u64>);
+
+impl <const L:usize> GeneratingFunction for SingleVariableGeneratingFunctionFixedLength<L> {
+    fn zero() -> Self {
+        SingleVariableGeneratingFunctionFixedLength::<L>(vec![])
+    }
+
+    fn one() -> Self {
+        SingleVariableGeneratingFunctionFixedLength::<L>(vec![1])
+    }
+
+    fn add(self, other: Self) -> Self {
+        let SingleVariableGeneratingFunctionFixedLength(mut res) = self;
+        let SingleVariableGeneratingFunctionFixedLength(other) = other;
+        for i in 0..other.len() {
+            let v = other[i];
+            if res.len()>i { res[i]+=v } else { res.push(v) }
+        }
+        SingleVariableGeneratingFunctionFixedLength::<L>(res)
+    }
+
+    /// shift up by one
+    fn variable_set(self, _variable: VariableIndex) -> Self {
+        let SingleVariableGeneratingFunctionFixedLength(mut res) = self;
+        if res.len()>0 { res.insert(0,0); }
+        if res.len()>L { res.pop(); }
+        SingleVariableGeneratingFunctionFixedLength::<L>(res)
+    }
+}

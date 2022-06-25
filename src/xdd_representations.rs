@@ -122,18 +122,20 @@ pub trait XDDBase {
     }
 */
     /// Make a node representing the negation of the function represented by the input node interpreted as a BDD. A.k.a. ~ or !.
-    /// TODO support caching of not.
-    fn not_bdd(&mut self,index:NodeIndex) -> NodeIndex {
+    fn not_bdd(&mut self,index:NodeIndex,cache : &mut HashMap<NodeIndex,NodeIndex>) -> NodeIndex {
         if index.is_true() { NodeIndex::FALSE }
         else if index.is_false() { NodeIndex::TRUE }
+        else if let Some(&res) = cache.get(&index) { res }
         else {
             let node = self.node(index);
             let newnode = Node {
                 variable: node.variable,
-                lo: self.not_bdd(node.lo),
-                hi: self.not_bdd(node.hi),
+                lo: self.not_bdd(node.lo,cache),
+                hi: self.not_bdd(node.hi,cache),
             };
-            self.add_node_if_not_present(newnode)
+            let res = self.add_node_if_not_present(newnode);
+            cache.insert(index,res);
+            res
         }
     }
 
@@ -174,42 +176,53 @@ pub trait XDDBase {
 
     /// Make a node representing index1 and index2 (and in the logical sense, a.k.a. ∧ or &&)
     /// TODO support general ops, and support caching of operations
-    fn and_bdd(&mut self,index1:NodeIndex,index2:NodeIndex) -> NodeIndex {
+    fn and_bdd(&mut self,index1:NodeIndex,index2:NodeIndex,cache : &mut HashMap<(NodeIndex,NodeIndex),NodeIndex>) -> NodeIndex {
         if index1.is_false() || index2.is_false() { NodeIndex::FALSE }
         else if index1.is_true() { index2 }
         else if index2.is_true() { index1 }
         else if index1==index2 { index1 }
         else {
-            let node1 = self.node(index1);
-            let node2 = self.node(index2);
-            let (lo1,hi1) = if node1.variable <= node2.variable { (node1.lo,node1.hi)} else {(index1,index1)};
-            let (lo2,hi2) = if node2.variable <= node1.variable { (node2.lo,node2.hi)} else {(index2,index2)};
-            let lo = self.and_bdd(lo1,lo2);
-            let hi = self.and_bdd(hi1,hi2);
-            if lo==hi { lo } else {
-                let variable = if node1.variable <= node2.variable { node1.variable } else {node2.variable};
-                self.add_node_if_not_present(Node{variable,lo,hi})
+            let key = if index1.0 < index2.0 {(index1,index2)} else {(index2,index1)};
+            if let Some(&res) = cache.get(&key) { res }
+            else {
+                let node1 = self.node(index1);
+                let node2 = self.node(index2);
+                let (lo1,hi1) = if node1.variable <= node2.variable { (node1.lo,node1.hi)} else {(index1,index1)};
+                let (lo2,hi2) = if node2.variable <= node1.variable { (node2.lo,node2.hi)} else {(index2,index2)};
+                let lo = self.and_bdd(lo1,lo2,cache);
+                let hi = self.and_bdd(hi1,hi2,cache);
+                let res = if lo==hi { lo } else {
+                    let variable = if node1.variable <= node2.variable { node1.variable } else {node2.variable};
+                    self.add_node_if_not_present(Node{variable,lo,hi})
+                };
+                cache.insert(key,res);
+                res
             }
         }
     }
 
     /// Make a node representing index1 and index2 (and in the logical sense, a.k.a. ∧ or &&)
-    /// TODO support general ops, and support caching of operations
-    fn or_bdd(&mut self,index1:NodeIndex,index2:NodeIndex) -> NodeIndex {
+    fn or_bdd(&mut self,index1:NodeIndex,index2:NodeIndex,cache : &mut HashMap<(NodeIndex,NodeIndex),NodeIndex>) -> NodeIndex {
         if index1.is_true() || index2.is_true() { NodeIndex::TRUE }
         else if index1.is_false() { index2 }
         else if index2.is_false() { index1 }
         else if index1==index2 { index1 }
         else {
-            let node1 = self.node(index1);
-            let node2 = self.node(index2);
-            let (lo1,hi1) = if node1.variable <= node2.variable { (node1.lo,node1.hi)} else {(index1,index1)};
-            let (lo2,hi2) = if node2.variable <= node1.variable { (node2.lo,node2.hi)} else {(index2,index2)};
-            let lo = self.or_bdd(lo1,lo2);
-            let hi = self.or_bdd(hi1,hi2);
-            if lo==hi { lo } else {
-                let variable = if node1.variable <= node2.variable { node1.variable } else {node2.variable};
-                self.add_node_if_not_present(Node{variable,lo,hi})
+            let key = if index1.0 < index2.0 {(index1,index2)} else {(index2,index1)};
+            if let Some(&res) = cache.get(&key) { res }
+            else {
+                let node1 = self.node(index1);
+                let node2 = self.node(index2);
+                let (lo1,hi1) = if node1.variable <= node2.variable { (node1.lo,node1.hi)} else {(index1,index1)};
+                let (lo2,hi2) = if node2.variable <= node1.variable { (node2.lo,node2.hi)} else {(index2,index2)};
+                let lo = self.or_bdd(lo1,lo2,cache);
+                let hi = self.or_bdd(hi1,hi2,cache);
+                let res = if lo==hi { lo } else {
+                    let variable = if node1.variable <= node2.variable { node1.variable } else {node2.variable};
+                    self.add_node_if_not_present(Node{variable,lo,hi})
+                };
+                cache.insert(key,res);
+                res
             }
         }
     }
