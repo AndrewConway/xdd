@@ -1,5 +1,6 @@
 
 use std::collections::HashMap;
+use std::hash::Hash;
 use crate::{Node, NodeIndex, VariableIndex};
 use crate::generating_function::GeneratingFunction;
 
@@ -141,41 +142,57 @@ pub trait XDDBase {
 
     /// Make a node representing the negation of the function represented by the input node interpreted as a ZDD. A.k.a. ~ or !.
     /// upto should be be VariableIndex(0) unless you want to ignore variables less than it.
-    /// TODO support caching of not.
-    fn not_zdd(&mut self,index:NodeIndex,upto:VariableIndex,total_number_variables:u16) -> NodeIndex {
+    /// TODO extend caching.
+    fn not_zdd(&mut self,index:NodeIndex,upto:VariableIndex,total_number_variables:u16,cache : &mut HashMap<(NodeIndex,VariableIndex),NodeIndex>) -> NodeIndex {
         //println!("not_zdd({},{},{})",index,upto,total_number_variables);
         // else if index.is_true() { self.create_zdd_any_variables_below_given_variable_true(upto,total_number_variables) }
-        let mut upper_bound = total_number_variables;
-        let mut index = {
-            if index.is_false() { NodeIndex::TRUE }
-            else if index.is_true() { NodeIndex::FALSE }
-            else {
-                let node = self.node(index);
-                upper_bound = node.variable.0;
-                let new_upto = VariableIndex(node.variable.0+1);
-                let newnode = Node {
-                    variable: node.variable,
-                    lo: self.not_zdd(node.lo,new_upto,total_number_variables),
-                    hi: self.not_zdd(node.hi,new_upto,total_number_variables),
+        let key = (index,upto);
+        if let Some(&res) = cache.get(&key) { res }
+        else {
+            let res={
+                let mut upper_bound = total_number_variables;
+                let mut index = {
+                    if index.is_false() { NodeIndex::TRUE }
+                    else if index.is_true() { NodeIndex::FALSE }
+                    else {
+                        let node = self.node(index);
+                        upper_bound = node.variable.0;
+                        let new_upto = VariableIndex(node.variable.0+1);
+                        let newnode = Node {
+                            variable: node.variable,
+                            lo: self.not_zdd(node.lo,new_upto,total_number_variables,cache),
+                            hi: self.not_zdd(node.hi,new_upto,total_number_variables,cache),
+                        };
+                        if newnode.hi.is_false() { newnode.lo }
+                        else { self.add_node_if_not_present(newnode) }
+                    }
                 };
-                if newnode.hi.is_false() { newnode.lo }
-                else { self.add_node_if_not_present(newnode) }
-            }
-        };
-        for i in (upto.0..upper_bound).rev() {
-            let hi = self.true_regardless_of_variables_below_zdd(VariableIndex(i+1),total_number_variables);
-            index = self.add_node_if_not_present(Node{
-                variable : VariableIndex(i),
-                lo: index,
-                hi,
-            });
+                for i in (upto.0..upper_bound).rev() {
+                    let hi = self.true_regardless_of_variables_below_zdd(VariableIndex(i+1),total_number_variables);
+                    index = self.add_node_if_not_present(Node{
+                        variable : VariableIndex(i),
+                        lo: index,
+                        hi,
+                    });
+                }
+                index
+            };
+            cache.insert(key,res);
+            res
         }
-        index
     }
 
+    /// Create a node for a zdd (or find existing) for variable variable with lo and hi choices, and store it in the provided cache.
+    /// Uniqueifies - sees if the hi and lo are same, in which case just produce lo, and looks for existing nodes.
+    fn create_node_bdd<K:Eq+Hash>(&mut self,lo:NodeIndex,hi:NodeIndex,variable:VariableIndex,key:K,cache:&mut HashMap<K,NodeIndex>) -> NodeIndex {
+        let res = if lo==hi { lo } else {
+            self.add_node_if_not_present(Node{variable,lo,hi})
+        };
+        cache.insert(key,res);
+        res
+    }
 
     /// Make a node representing index1 and index2 (and in the logical sense, a.k.a. ∧ or &&)
-    /// TODO support general ops, and support caching of operations
     fn and_bdd(&mut self,index1:NodeIndex,index2:NodeIndex,cache : &mut HashMap<(NodeIndex,NodeIndex),NodeIndex>) -> NodeIndex {
         if index1.is_false() || index2.is_false() { NodeIndex::FALSE }
         else if index1.is_true() { index2 }
@@ -191,12 +208,7 @@ pub trait XDDBase {
                 let (lo2,hi2) = if node2.variable <= node1.variable { (node2.lo,node2.hi)} else {(index2,index2)};
                 let lo = self.and_bdd(lo1,lo2,cache);
                 let hi = self.and_bdd(hi1,hi2,cache);
-                let res = if lo==hi { lo } else {
-                    let variable = if node1.variable <= node2.variable { node1.variable } else {node2.variable};
-                    self.add_node_if_not_present(Node{variable,lo,hi})
-                };
-                cache.insert(key,res);
-                res
+                self.create_node_bdd(lo,hi,if node1.variable <= node2.variable { node1.variable } else {node2.variable},key,cache)
             }
         }
     }
@@ -217,12 +229,7 @@ pub trait XDDBase {
                 let (lo2,hi2) = if node2.variable <= node1.variable { (node2.lo,node2.hi)} else {(index2,index2)};
                 let lo = self.or_bdd(lo1,lo2,cache);
                 let hi = self.or_bdd(hi1,hi2,cache);
-                let res = if lo==hi { lo } else {
-                    let variable = if node1.variable <= node2.variable { node1.variable } else {node2.variable};
-                    self.add_node_if_not_present(Node{variable,lo,hi})
-                };
-                cache.insert(key,res);
-                res
+                self.create_node_bdd(lo,hi,if node1.variable <= node2.variable { node1.variable } else {node2.variable},key,cache)
             }
         }
     }
@@ -237,23 +244,32 @@ pub trait XDDBase {
         index
     }
 
+    /// Create a node for a zdd (or find existing) for variable variable with lo and hi choices, and store it in the provided cache.
+    /// Uniqueifies - sees if the hi is false, in which case just produce lo, and looks for existing nodes.
+    fn create_node_zdd<K:Eq+Hash>(&mut self,lo:NodeIndex,hi:NodeIndex,variable:VariableIndex,key:K,cache:&mut HashMap<K,NodeIndex>) -> NodeIndex {
+        let res = if hi.is_false() { lo } else {
+            self.add_node_if_not_present(Node{variable,lo,hi})
+        };
+        cache.insert(key,res);
+        res
+    }
     /// Make a node representing index1 and index2 (and in the logical sense, a.k.a. ∧ or &&)
-    /// TODO support general ops, and support caching of operations
-    fn and_zdd(&mut self,index1:NodeIndex,index2:NodeIndex) -> NodeIndex {
+    fn and_zdd(&mut self,index1:NodeIndex,index2:NodeIndex,cache : &mut HashMap<(NodeIndex,NodeIndex),NodeIndex>) -> NodeIndex {
         if index1.is_false() || index2.is_false() { NodeIndex::FALSE }
         else if index1.is_true() { self.and_zdd_true(index2) }
         else if index2.is_true() { self.and_zdd_true(index1) }
         else if index1==index2 { index1 }
         else {
-            let node1 = self.node(index1);
-            let node2 = self.node(index2);
-            let (lo1,hi1) = if node1.variable <= node2.variable { (node1.lo,node1.hi)} else {(index1,NodeIndex::FALSE)};
-            let (lo2,hi2) = if node2.variable <= node1.variable { (node2.lo,node2.hi)} else {(index2,NodeIndex::FALSE)};
-            let lo = self.and_zdd(lo1,lo2);
-            let hi = self.and_zdd(hi1,hi2);
-            if hi.is_false() { lo } else {
-                let variable = if node1.variable <= node2.variable { node1.variable } else {node2.variable};
-                self.add_node_if_not_present(Node{variable,lo,hi})
+            let key = if index1.0 < index2.0 {(index1,index2)} else {(index2,index1)};
+            if let Some(&res) = cache.get(&key) { res }
+            else {
+                let node1 = self.node(index1);
+                let node2 = self.node(index2);
+                let (lo1,hi1) = if node1.variable <= node2.variable { (node1.lo,node1.hi)} else {(index1,NodeIndex::FALSE)};
+                let (lo2,hi2) = if node2.variable <= node1.variable { (node2.lo,node2.hi)} else {(index2,NodeIndex::FALSE)};
+                let lo = self.and_zdd(lo1,lo2,cache);
+                let hi = self.and_zdd(hi1,hi2,cache);
+                self.create_node_zdd(lo,hi,if node1.variable <= node2.variable { node1.variable } else {node2.variable},key,cache)
             }
         }
     }
@@ -277,23 +293,23 @@ pub trait XDDBase {
 
 
     /// Make a node representing index1 and index2 (and in the logical sense, a.k.a. ∧ or &&)
-    /// TODO support general ops, and support caching of operations
-    fn or_zdd(&mut self,index1:NodeIndex,index2:NodeIndex) -> NodeIndex {
+    fn or_zdd(&mut self,index1:NodeIndex,index2:NodeIndex,cache : &mut HashMap<(NodeIndex,NodeIndex),NodeIndex>) -> NodeIndex {
         if index1.is_false() { index2 }
         else if index2.is_false() { index1 }
         else if index1.is_true() { self.or_zdd_true(index2) }
         else if index2.is_true() { self.or_zdd_true(index1) }
         else if index1==index2 { index1 }
         else {
-            let node1 = self.node(index1);
-            let node2 = self.node(index2);
-            let (lo1,hi1) = if node1.variable <= node2.variable { (node1.lo,node1.hi)} else {(index1,NodeIndex::FALSE)};
-            let (lo2,hi2) = if node2.variable <= node1.variable { (node2.lo,node2.hi)} else {(index2,NodeIndex::FALSE)};
-            let lo = self.or_zdd(lo1,lo2);
-            let hi = self.or_zdd(hi1,hi2);
-            if hi.is_false() { lo } else {
-                let variable = if node1.variable <= node2.variable { node1.variable } else {node2.variable};
-                self.add_node_if_not_present(Node{variable,lo,hi})
+            let key = if index1.0 < index2.0 {(index1,index2)} else {(index2,index1)};
+            if let Some(&res) = cache.get(&key) { res }
+            else {
+                let node1 = self.node(index1);
+                let node2 = self.node(index2);
+                let (lo1,hi1) = if node1.variable <= node2.variable { (node1.lo,node1.hi)} else {(index1,NodeIndex::FALSE)};
+                let (lo2,hi2) = if node2.variable <= node1.variable { (node2.lo,node2.hi)} else {(index2,NodeIndex::FALSE)};
+                let lo = self.or_zdd(lo1,lo2,cache);
+                let hi = self.or_zdd(hi1,hi2,cache);
+                self.create_node_zdd(lo,hi,if node1.variable <= node2.variable { node1.variable } else {node2.variable},key,cache)
             }
         }
     }

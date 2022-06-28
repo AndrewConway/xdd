@@ -13,7 +13,10 @@
 pub mod xdd_representations;
 pub mod generating_function;
 
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use crate::generating_function::GeneratingFunction;
+use crate::xdd_representations::{NodeListWithFastLookup, XDDBase};
 
 /// The identifier of a variable. Variable 0 is the highest one in the diagram.
 #[derive(Copy, Clone,Eq, PartialEq,Hash,Ord, PartialOrd,Debug)]
@@ -76,26 +79,121 @@ impl Node {
             hi: NodeIndex::TRUE
         }
     }
-
 }
 
-/*
-/// A free standing decision tree.
-pub struct FreestandingXDD {
-    pub start : NodeIndex,
-    pub nodes : Vec<Node>,
+/// A object that can function as a decision diagram factory, doing stuff quickly.
+pub trait DecisionDiagramFactory {
+    /// Compute a diagram being the logical and of index1 and index2.
+    fn and(&mut self,index1:NodeIndex,index2:NodeIndex) -> NodeIndex;
+    /// Compute a diagram being the logical or of index1 and index2.
+    fn or(&mut self,index1:NodeIndex,index2:NodeIndex) -> NodeIndex;
+    /// Compute a diagram being the logical not of index1 and index2.
+    fn not(&mut self,index:NodeIndex) -> NodeIndex;
+    /// Enumerate the solutions to the given generating function.
+    fn number_solutions<G:GeneratingFunction>(&self,index:NodeIndex) -> G;
+    /// Produce a DD that describes a single variable. That is, a DD that has all variables having no effect other than just that variable leading to TRUE iff variable is true.
+    fn single_variable(&mut self,variable:VariableIndex) -> NodeIndex;
+    /// Get the number of nodes in the DD.
+    fn len(&self) -> usize;
 }
 
-pub struct DDFactory {
-    pub(crate) nodes : Vec<Node>,
-    pub(crate) node_to_index : HashMap<Node,NodeIndex>,
+/// A factory that can do efficient operations on BDDs.
+pub struct BDDFactory {
+    nodes : NodeListWithFastLookup,
+    and_cache : HashMap<(NodeIndex,NodeIndex),NodeIndex>,
+    or_cache : HashMap<(NodeIndex,NodeIndex),NodeIndex>,
+    not_cache : HashMap<NodeIndex,NodeIndex>,
+    num_variables : u16,
+}
+impl BDDFactory {
+    pub fn new(num_variables:u16) -> Self {
+        BDDFactory{
+            nodes: Default::default(),
+            and_cache: Default::default(),
+            or_cache: Default::default(),
+            not_cache: Default::default(),
+            num_variables
+        }
+    }
+}
+impl DecisionDiagramFactory for BDDFactory {
+    fn and(&mut self, index1: NodeIndex, index2: NodeIndex) -> NodeIndex {
+        self.nodes.and_bdd(index1,index2,&mut self.and_cache)
+    }
+
+    fn or(&mut self, index1: NodeIndex, index2: NodeIndex) -> NodeIndex {
+        self.nodes.or_bdd(index1,index2,&mut self.or_cache)
+    }
+
+    fn not(&mut self, index:NodeIndex) -> NodeIndex {
+        self.nodes.not_bdd(index,&mut self.not_cache)
+    }
+
+    fn number_solutions<G: GeneratingFunction>(&self, index: NodeIndex) -> G {
+        self.nodes.number_solutions::<G,true>(index,self.num_variables)
+    }
+
+    fn single_variable(&mut self, variable: VariableIndex) -> NodeIndex {
+        self.nodes.single_variable(variable)
+    }
+
+    fn len(&self) -> usize {
+        self.nodes.len()
+    }
 }
 
-pub struct XDDInFactory<'a> {
-    start : NodeIndex,
-    factory : &'a DDFactory,
+
+/// A factory that can do efficient operations on BDDs.
+pub struct ZDDFactory {
+    nodes : NodeListWithFastLookup,
+    and_cache : HashMap<(NodeIndex,NodeIndex),NodeIndex>,
+    or_cache : HashMap<(NodeIndex,NodeIndex),NodeIndex>,
+    not_cache : HashMap<(NodeIndex,VariableIndex),NodeIndex>,
+    num_variables : u16,
 }
-*/
+
+impl ZDDFactory {
+    pub fn new(num_variables:u16) -> Self {
+        ZDDFactory{
+            nodes: Default::default(),
+            and_cache: Default::default(),
+            or_cache: Default::default(),
+            not_cache: Default::default(),
+            num_variables
+        }
+    }
+}
+impl DecisionDiagramFactory for ZDDFactory {
+    fn and(&mut self, index1: NodeIndex, index2: NodeIndex) -> NodeIndex {
+        self.nodes.and_zdd(index1,index2,&mut self.and_cache)
+    }
+
+    fn or(&mut self, index1: NodeIndex, index2: NodeIndex) -> NodeIndex {
+        self.nodes.or_zdd(index1,index2,&mut self.or_cache)
+    }
+
+    fn not(&mut self, index:NodeIndex) -> NodeIndex {
+        self.nodes.not_zdd(index,VariableIndex(0),self.num_variables,&mut self.not_cache)
+    }
+
+    fn number_solutions<G: GeneratingFunction>(&self, index: NodeIndex) -> G {
+        self.nodes.number_solutions::<G,false>(index,self.num_variables)
+    }
+
+    fn single_variable(&mut self, variable: VariableIndex) -> NodeIndex {
+        self.nodes.single_variable_zdd(variable,self.num_variables)
+    }
+
+    fn len(&self) -> usize {
+        self.nodes.len()
+    }
+}
+
+
+
+
+
+
 #[cfg(test)]
 mod tests {
     #[test]

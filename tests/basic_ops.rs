@@ -34,7 +34,7 @@ fn zdd_basic_ops<F:XDDBase+Default>() {
     assert_eq!(4, factory.len());
 
 
-    let not_v0 = factory.not_zdd(v0,VariableIndex(0),2);
+    let not_v0 = factory.not_zdd(v0,VariableIndex(0),2,&mut HashMap::new());
     // println!("{}",not_v0);
     // not_v0 should be just v1?true:true.
     assert_eq!(4,factory.len());
@@ -47,27 +47,27 @@ fn zdd_basic_ops<F:XDDBase+Default>() {
     assert_eq!(true,factory.evaluate_zdd(not_v0,&[false,true]));
     assert_eq!(false,factory.evaluate_zdd(not_v0,&[true,true]));
 
-    let not_v0_duplicate = factory.not_zdd(v0,VariableIndex(0),2);
+    let not_v0_duplicate = factory.not_zdd(v0,VariableIndex(0),2,&mut HashMap::new());
     assert_eq!(not_v0_duplicate,not_v0);
     assert_eq!(4,factory.len());
 
-    let and_v0_v1 = factory.and_zdd(v0,v1);
+    let and_v0_v1 = factory.and_zdd(v0,v1,&mut HashMap::new());
     assert_eq!(5,factory.len());
     assert_eq!(false,factory.evaluate_zdd(and_v0_v1,&[false,false]));
     assert_eq!(false,factory.evaluate_zdd(and_v0_v1,&[true,false]));
     assert_eq!(false,factory.evaluate_zdd(and_v0_v1,&[false,true]));
     assert_eq!(true,factory.evaluate_zdd(and_v0_v1,&[true,true]));
-    let and_v1_v0 = factory.and_zdd(v1,v0);
+    let and_v1_v0 = factory.and_zdd(v1,v0,&mut HashMap::new());
     assert_eq!(and_v0_v1,and_v1_v0);
     assert_eq!(5,factory.len());
 
-    let or_v0_v1 = factory.or_zdd(v0,v1);
+    let or_v0_v1 = factory.or_zdd(v0,v1,&mut HashMap::new());
     assert_eq!(6,factory.len());
     assert_eq!(false,factory.evaluate_zdd(or_v0_v1,&[false,false]));
     assert_eq!(true,factory.evaluate_zdd(or_v0_v1,&[true,false]));
     assert_eq!(true,factory.evaluate_zdd(or_v0_v1,&[false,true]));
     assert_eq!(true,factory.evaluate_zdd(or_v0_v1,&[true,true]));
-    let or_v1_v0 = factory.or_zdd(v1,v0);
+    let or_v1_v0 = factory.or_zdd(v1,v0,&mut HashMap::new());
     assert_eq!(or_v0_v1,or_v1_v0);
     assert_eq!(6,factory.len());
 
