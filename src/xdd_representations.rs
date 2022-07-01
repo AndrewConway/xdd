@@ -1,6 +1,6 @@
-
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::ops::Range;
 use crate::{Node, NodeIndex, NodeRenaming, VariableIndex};
 use crate::generating_function::GeneratingFunction;
 
@@ -44,6 +44,52 @@ pub trait XDDBase {
             });
         }
         index
+    }
+
+    /// Produce a BDD which is true iff exactly 1 of the given variables is true, regardless of other variables.
+    /// The variables array must be sorted, smallest to highest.
+    fn exactly_one_of_bdd(&mut self,variables:&[VariableIndex]) -> NodeIndex {
+        if variables.len()==0 { NodeIndex::FALSE } else {
+            let mut right = NodeIndex::TRUE;
+            let mut left = NodeIndex::FALSE;
+            // The diagram that is needed has two parallel diagonal lines, one right, one left.
+            // One is on the right if one has had exactly 1 variable, one is on the left if one has had 0 variables.
+            for &variable in variables.into_iter().rev() {
+                left = self.add_node_if_not_present(Node{variable,lo:left,hi:right});
+                if variable==variables[0] { return left; }
+                right = self.add_node_if_not_present(Node{variable,lo:right,hi:NodeIndex::FALSE});
+            }
+            panic!("Never got to the first variable.");
+        }
+    }
+
+    fn zdd_variables_in_range_dont_matter(&mut self,base:NodeIndex,range:Range<u16>) -> NodeIndex {
+        let mut res = base;
+        for v in range.rev() {
+            res=self.add_node_if_not_present(Node{variable:VariableIndex(v),lo:res,hi:res});
+        }
+        res
+    }
+
+    /// Produce a ZDD which is true iff exactly 1 of the given variables is true, regardless of other variables.
+    /// The variables array must be sorted, smallest to highest.
+    fn exactly_one_of_zdd(&mut self,variables:&[VariableIndex],total_num_variables:u16) -> NodeIndex {
+        if variables.len()==0 { NodeIndex::FALSE } else {
+            let mut right = NodeIndex::TRUE;
+            let mut left = NodeIndex::FALSE;
+            let mut dealt_with = total_num_variables;
+            // The diagram that is needed has two parallel diagonal lines, one right, one left.
+            // One is on the right if one has had exactly 1 variable, one is on the left if one has had 0 variables.
+            for &variable in variables.into_iter().rev() {
+                left = self.zdd_variables_in_range_dont_matter(left,variable.0+1..dealt_with);
+                right = self.zdd_variables_in_range_dont_matter(right,variable.0+1..dealt_with);
+                dealt_with = variable.0;
+                left = self.add_node_if_not_present(Node{variable,lo:left,hi:right});
+                if variable==variables[0] { return self.zdd_variables_in_range_dont_matter(left,0..dealt_with); }
+                right = self.add_node_if_not_present(Node{variable,lo:right,hi:NodeIndex::FALSE});
+            }
+            panic!("Never got to the first variable.");
+        }
     }
 
     /// make a function that is true if starting evaluating a ZDD starting from upto.

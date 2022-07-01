@@ -85,6 +85,8 @@ impl Node {
 
 /// A object that can function as a decision diagram factory, doing stuff quickly.
 pub trait DecisionDiagramFactory {
+    /// Make a new decision diagram with the stated number of variables.
+    fn new(num_variables:u16) -> Self;
     /// Compute a diagram being the logical and of index1 and index2.
     fn and(&mut self,index1:NodeIndex,index2:NodeIndex) -> NodeIndex;
     /// Compute a diagram being the logical or of index1 and index2.
@@ -100,6 +102,21 @@ pub trait DecisionDiagramFactory {
     /// Do garbage collection. Provide the items one wants to keep, and get rid of anything not in the transitive dependencies of keep.
     /// Returns a vector v such that v[old_node.0] is what v maps in to. If nothing, then map into NodeIndex::JUNK.
     fn gc(&mut self,keep:impl IntoIterator<Item=NodeIndex>) -> NodeRenaming;
+    /// Produce a DD which is true iff exactly 1 of the given variables is true, regardless of other variables.
+    /// The variables array must be sorted, smallest to highest.
+    fn exactly_one_of(&mut self,variables:&[VariableIndex]) -> NodeIndex;
+    /// Do an "and" of lots of functions.
+    fn poly_and(&mut self,indices:&[NodeIndex]) -> Option<NodeIndex> {
+        let mut res : Option<NodeIndex> = None;
+        for n in indices {
+            if let Some(ni) = res {
+                res=Some(self.and(*n,ni));
+            } else {
+                res=Some(*n);
+            }
+        }
+        res
+    }
 }
 
 /// A factory that can do efficient operations on BDDs.
@@ -110,8 +127,9 @@ pub struct BDDFactory {
     not_cache : HashMap<NodeIndex,NodeIndex>,
     num_variables : u16,
 }
-impl BDDFactory {
-    pub fn new(num_variables:u16) -> Self {
+
+impl DecisionDiagramFactory for BDDFactory {
+    fn new(num_variables:u16) -> Self {
         BDDFactory{
             nodes: Default::default(),
             and_cache: Default::default(),
@@ -120,8 +138,6 @@ impl BDDFactory {
             num_variables
         }
     }
-}
-impl DecisionDiagramFactory for BDDFactory {
     fn and(&mut self, index1: NodeIndex, index2: NodeIndex) -> NodeIndex {
         self.nodes.and_bdd(index1,index2,&mut self.and_cache)
     }
@@ -152,6 +168,10 @@ impl DecisionDiagramFactory for BDDFactory {
         self.not_cache.clear();
         self.nodes.gc(keep)
     }
+
+    fn exactly_one_of(&mut self, variables: &[VariableIndex]) -> NodeIndex {
+        self.nodes.exactly_one_of_bdd(variables)
+    }
 }
 
 
@@ -164,8 +184,9 @@ pub struct ZDDFactory {
     num_variables : u16,
 }
 
-impl ZDDFactory {
-    pub fn new(num_variables:u16) -> Self {
+
+impl DecisionDiagramFactory for ZDDFactory {
+    fn new(num_variables:u16) -> Self {
         ZDDFactory{
             nodes: Default::default(),
             and_cache: Default::default(),
@@ -174,8 +195,7 @@ impl ZDDFactory {
             num_variables
         }
     }
-}
-impl DecisionDiagramFactory for ZDDFactory {
+
     fn and(&mut self, index1: NodeIndex, index2: NodeIndex) -> NodeIndex {
         self.nodes.and_zdd(index1,index2,&mut self.and_cache)
     }
@@ -205,6 +225,10 @@ impl DecisionDiagramFactory for ZDDFactory {
         self.or_cache.clear();
         self.not_cache.clear();
         self.nodes.gc(keep)
+    }
+
+    fn exactly_one_of(&mut self, variables: &[VariableIndex]) -> NodeIndex {
+        self.nodes.exactly_one_of_zdd(variables,self.num_variables)
     }
 }
 

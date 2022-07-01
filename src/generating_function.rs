@@ -38,6 +38,15 @@ impl GeneratingFunction for u64 {
     fn variable_set(self, _variable: VariableIndex) -> Self { self }
 }
 
+/// A simple generating function that separates counts by the number of variables set.
+impl GeneratingFunction for u128 {
+    fn zero() -> Self { 0 }
+    fn one() -> Self { 1 }
+    fn add(self, other: Self) -> Self { self+other }
+    fn variable_set(self, _variable: VariableIndex) -> Self { self }
+}
+
+
 #[derive(Clone,Eq, PartialEq,Debug)]
 pub struct SingleVariableGeneratingFunction(pub Vec<u64>);
 

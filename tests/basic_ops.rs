@@ -102,7 +102,14 @@ fn zdd_basic_ops<F:XDDBase+Default>() {
     assert_eq!(false,factory.evaluate_zdd(and_v0_v1,&[false,true]));
     assert_eq!(true,factory.evaluate_zdd(and_v0_v1,&[true,true]));
 
-    assert_eq!(or_v0_v1,factory.or_zdd(or_v0_v1,and_v0_v1,&mut HashMap::new()))
+    assert_eq!(or_v0_v1,factory.or_zdd(or_v0_v1,and_v0_v1,&mut HashMap::new()));
+
+    let xor_v0_v1 = factory.exactly_one_of_zdd(&[VariableIndex(0),VariableIndex(1)],2);
+    assert_eq!(6,factory.len());
+    assert_eq!(false,factory.evaluate_zdd(xor_v0_v1,&[false,false]));
+    assert_eq!(true,factory.evaluate_zdd(xor_v0_v1,&[true,false]));
+    assert_eq!(true,factory.evaluate_zdd(xor_v0_v1,&[false,true]));
+    assert_eq!(false,factory.evaluate_zdd(xor_v0_v1,&[true,true]));
 
 }
 
@@ -207,7 +214,14 @@ fn bdd_basic_ops<F:XDDBase+Default>() {
     assert_eq!(false,factory.evaluate_bdd(and_v0_v1,&[false,true]));
     assert_eq!(true,factory.evaluate_bdd(and_v0_v1,&[true,true]));
 
-    assert_eq!(or_v0_v1,factory.or_bdd(or_v0_v1,and_v0_v1,&mut HashMap::new()))
+    assert_eq!(or_v0_v1,factory.or_bdd(or_v0_v1,and_v0_v1,&mut HashMap::new()));
+
+    let xor_v0_v1 = factory.exactly_one_of_bdd(&[VariableIndex(0),VariableIndex(1)]);
+    assert_eq!(5,factory.len());
+    assert_eq!(false,factory.evaluate_bdd(xor_v0_v1,&[false,false]));
+    assert_eq!(true,factory.evaluate_bdd(xor_v0_v1,&[true,false]));
+    assert_eq!(true,factory.evaluate_bdd(xor_v0_v1,&[false,true]));
+    assert_eq!(false,factory.evaluate_bdd(xor_v0_v1,&[true,true]));
 
 }
 
