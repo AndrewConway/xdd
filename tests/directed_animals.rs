@@ -83,7 +83,9 @@ fn count_zdd_old() {
     assert_eq!(13,result.0[4]);
     assert_eq!(35,result.0[5]);
     assert_eq!(96,result.0[6]);
-    println!("Used {} nodes",factory.len());
+    let original_size = factory.len();
+    factory.gc([function.unwrap()]);
+    println!("Used {} nodes ({} after GC)",original_size,factory.len());
 }
 
 
@@ -130,7 +132,10 @@ fn count_bdd_old() {
     assert_eq!(143365,result.0[13]);
     assert_eq!(414584,result.0[14]);
     assert_eq!(1201917,result.0[15]);
-    println!("Used {} nodes",factory.len());
+    let original_size = factory.len();
+    factory.gc([function.unwrap()]);
+    println!("Used {} nodes ({} after GC)",original_size,factory.len());
+
 }
 
 /// Count using a decision diagram, given a creator function for the factory taking the number of variables.
@@ -173,8 +178,9 @@ fn count_xdd<F:DecisionDiagramFactory>(creator : impl Fn(u16) -> F) {
     assert_eq!(143365,result.0[13]);
     //assert_eq!(414584,result.0[14]);
     //assert_eq!(1201917,result.0[15]);
-    println!("Used {} nodes",factory.len());
-
+    let original_size = factory.len();
+    factory.gc([function.unwrap()]);
+    println!("Used {} nodes ({} after GC)",original_size,factory.len());
 }
 
 #[test]

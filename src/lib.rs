@@ -50,6 +50,8 @@ impl NodeIndex {
     /// Special sink index that indicates the result is true. Sometimes called 1 or Top or ⊤.
     /// Do not use this node index for anything else.
     pub const TRUE : NodeIndex = NodeIndex(1);
+    /// Special entry meaning garbage collected. Only encountered in the result of the gc() function.
+    pub(crate) const JUNK : NodeIndex = NodeIndex(u32::MAX);
 
     /// See if the node index is one of the two special sink nodes.
     pub fn is_sink(self) -> bool { self.0<=1 }
@@ -95,6 +97,9 @@ pub trait DecisionDiagramFactory {
     fn single_variable(&mut self,variable:VariableIndex) -> NodeIndex;
     /// Get the number of nodes in the DD.
     fn len(&self) -> usize;
+    /// Do garbage collection. Provide the items one wants to keep, and get rid of anything not in the transitive dependencies of keep.
+    /// Returns a vector v such that v[old_node.0] is what v maps in to. If nothing, then map into NodeIndex::JUNK.
+    fn gc(&mut self,keep:impl IntoIterator<Item=NodeIndex>) -> NodeRenaming;
 }
 
 /// A factory that can do efficient operations on BDDs.
@@ -139,6 +144,13 @@ impl DecisionDiagramFactory for BDDFactory {
 
     fn len(&self) -> usize {
         self.nodes.len()
+    }
+
+    fn gc(&mut self,keep:impl IntoIterator<Item=NodeIndex>) -> NodeRenaming {
+        self.and_cache.clear();
+        self.or_cache.clear();
+        self.not_cache.clear();
+        self.nodes.gc(keep)
     }
 }
 
@@ -187,10 +199,23 @@ impl DecisionDiagramFactory for ZDDFactory {
     fn len(&self) -> usize {
         self.nodes.len()
     }
+
+    fn gc(&mut self,keep:impl IntoIterator<Item=NodeIndex>) -> NodeRenaming {
+        self.and_cache.clear();
+        self.or_cache.clear();
+        self.not_cache.clear();
+        self.nodes.gc(keep)
+    }
 }
 
+pub struct NodeRenaming(Vec<NodeIndex>);
 
-
+impl NodeRenaming {
+    pub fn rename(&self,index:NodeIndex) -> Option<NodeIndex> {
+        let res = self.0[index.0 as usize];
+        if res==NodeIndex::JUNK { None } else { Some(res) }
+    }
+}
 
 
 

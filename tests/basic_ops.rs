@@ -86,6 +86,24 @@ fn zdd_basic_ops<F:XDDBase+Default>() {
     assert_eq!(SingleVariableGeneratingFunction(vec![0,0,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(and_v0_v1,2));
     assert_eq!(SingleVariableGeneratingFunction(vec![0,2,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(or_v0_v1,2));
 
+    // Check GC
+    let map = factory.gc([or_v0_v1,and_v0_v1]);
+    assert_eq!(4,factory.len());
+    let or_v0_v1 = map.rename(or_v0_v1).unwrap();
+    let and_v0_v1 = map.rename(and_v0_v1).unwrap();
+    //factory.print(or_v0_v1);
+    assert_eq!(false,factory.evaluate_zdd(or_v0_v1,&[false,false]));
+    assert_eq!(true,factory.evaluate_zdd(or_v0_v1,&[true,false]));
+    assert_eq!(true,factory.evaluate_zdd(or_v0_v1,&[false,true]));
+    assert_eq!(true,factory.evaluate_zdd(or_v0_v1,&[true,true]));
+
+    assert_eq!(false,factory.evaluate_zdd(and_v0_v1,&[false,false]));
+    assert_eq!(false,factory.evaluate_zdd(and_v0_v1,&[true,false]));
+    assert_eq!(false,factory.evaluate_zdd(and_v0_v1,&[false,true]));
+    assert_eq!(true,factory.evaluate_zdd(and_v0_v1,&[true,true]));
+
+    assert_eq!(or_v0_v1,factory.or_zdd(or_v0_v1,and_v0_v1,&mut HashMap::new()))
+
 }
 
 #[test]
@@ -172,6 +190,24 @@ fn bdd_basic_ops<F:XDDBase+Default>() {
     assert_eq!(SingleVariableGeneratingFunction(vec![0,0,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(and_v0_v1,2));
     assert_eq!(SingleVariableGeneratingFunction(vec![1,2]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(not_and_v0_v1,2));
     //assert_eq!(SingleVariableGeneratingFunction(vec![0,2,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(or_v0_v1,2));
+
+    // Check GC
+    let map = factory.gc([or_v0_v1,and_v0_v1]);
+    assert_eq!(3,factory.len());
+    let or_v0_v1 = map.rename(or_v0_v1).unwrap();
+    let and_v0_v1 = map.rename(and_v0_v1).unwrap();
+    //factory.print(or_v0_v1);
+    assert_eq!(false,factory.evaluate_bdd(or_v0_v1,&[false,false]));
+    assert_eq!(true,factory.evaluate_bdd(or_v0_v1,&[true,false]));
+    assert_eq!(true,factory.evaluate_bdd(or_v0_v1,&[false,true]));
+    assert_eq!(true,factory.evaluate_bdd(or_v0_v1,&[true,true]));
+
+    assert_eq!(false,factory.evaluate_bdd(and_v0_v1,&[false,false]));
+    assert_eq!(false,factory.evaluate_bdd(and_v0_v1,&[true,false]));
+    assert_eq!(false,factory.evaluate_bdd(and_v0_v1,&[false,true]));
+    assert_eq!(true,factory.evaluate_bdd(and_v0_v1,&[true,true]));
+
+    assert_eq!(or_v0_v1,factory.or_bdd(or_v0_v1,and_v0_v1,&mut HashMap::new()))
 
 }
 

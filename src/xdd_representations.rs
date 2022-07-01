@@ -1,7 +1,7 @@
 
 use std::collections::HashMap;
 use std::hash::Hash;
-use crate::{Node, NodeIndex, VariableIndex};
+use crate::{Node, NodeIndex, NodeRenaming, VariableIndex};
 use crate::generating_function::GeneratingFunction;
 
 /// Functions that any representation of an XDD must have, although some representations
@@ -356,6 +356,10 @@ pub trait XDDBase {
     fn number_solutions_bdd<G:GeneratingFunction>(&self,index:NodeIndex,num_variables:u16) -> G { self.number_solutions::<G,true>(index,num_variables) }
     fn number_solutions_zdd<G:GeneratingFunction>(&self,index:NodeIndex,num_variables:u16) -> G { self.number_solutions::<G,false>(index,num_variables) }
 
+    /// Do garbage collection. Provide the items one wants to keep, and get rid of anything not in the transitive dependencies of keep.
+    /// Returns a renamer from old nodes to new nodes.
+    fn gc(&mut self,keep:impl IntoIterator<Item=NodeIndex>) -> NodeRenaming;
+
 }
 
 
@@ -382,6 +386,47 @@ impl XDDBase for NodeList {
     }
 
     fn len(&self) -> usize { self.nodes.len() }
+
+    /// Do garbage collection. Provide the items one wants to keep, and get rid of anything not in the transitive dependencies of keep.
+    /// Returns a renamer such that v[old_node.0] is what v maps in to. If nothing, then map into NodeIndex::JUNK.
+    fn gc(&mut self,keep:impl IntoIterator<Item=NodeIndex>) -> NodeRenaming {
+        let mut map = vec![NodeIndex::JUNK;self.len()+2];
+        // initially map is used to detect what to keep.
+        const KEEP: NodeIndex = NodeIndex::TRUE;
+        fn do_keep(nodes:&Vec<Node>,map:&mut Vec<NodeIndex>,n:NodeIndex) {
+            if map[n.0 as usize]!=KEEP {
+                map[n.0 as usize]=KEEP;
+                let node = nodes[(n.0-2) as usize];
+                do_keep(nodes,map,node.lo);
+                do_keep(nodes,map,node.hi);
+            }
+        }
+        map[0]=KEEP; // FALSE
+        map[1]=KEEP; // TRUE
+        for k in keep.into_iter() {
+            do_keep(&self.nodes,&mut map,k);
+        }
+        map[0]=NodeIndex::FALSE;
+        map[1]=NodeIndex::TRUE;
+        let mut len:usize = 0;
+        for i in 2..map.len() {
+            let into = map[i];
+            if into==KEEP {
+                map[i]=NodeIndex((len+2) as u32);
+                let old_node = self.nodes[i-2];
+                self.nodes[len]=Node {
+                    variable: old_node.variable,
+                    lo: map[old_node.lo.0 as usize],
+                    hi: map[old_node.hi.0 as usize],
+                };
+                len=len+1;
+            }
+        }
+        self.nodes.truncate(len);
+        // now convert map into the final result.
+        NodeRenaming(map)
+    }
+
 }
 
 /// An extension to NodeList that contains a cache from nodes to indices that is constantly
@@ -404,4 +449,13 @@ impl XDDBase for NodeListWithFastLookup {
         res
     }
     fn len(&self) -> usize { self.nodes.len() }
+
+    fn gc(&mut self, keep: impl IntoIterator<Item=NodeIndex>) -> NodeRenaming {
+        let map = self.nodes.gc(keep);
+        self.node_to_index.clear();
+        for (i,node) in self.nodes.nodes.iter().enumerate() {
+            self.node_to_index.insert(*node,NodeIndex((i+2) as u32));
+        }
+        map
+    }
 }
