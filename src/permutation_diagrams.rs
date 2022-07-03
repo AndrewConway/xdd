@@ -222,6 +222,7 @@ pub struct PermutationDecisionDiagramFactory<I> {
     pub zdd : ZDDFactory,
     pub vars : PermutationEncodingAsVariables<I>,
     i_cache : HashMap<(NodeIndex,VariableIndex),NodeIndex>, // cache of the "I" operation
+    compose_cache : HashMap<(NodeIndex,NodeIndex),NodeIndex>, // cache of the compose/cross product operation
 }
 
 impl <I> PermutationDecisionDiagramFactory<I> {
@@ -230,7 +231,7 @@ impl <I> PermutationDecisionDiagramFactory<I> {
     /// total number of variables will be (num_elements_in_permutation-1)(num_elements_in_permutation-2)/2.
     pub fn new(num_elements_in_permutation: u16) -> Self {
         let vars = PermutationEncodingAsVariables::new(num_elements_in_permutation as PermutedItem);
-        PermutationDecisionDiagramFactory{ zdd: ZDDFactory::new(vars.num_variables()), vars, i_cache:Default::default() }
+        PermutationDecisionDiagramFactory{ zdd: ZDDFactory::new(vars.num_variables()), vars, i_cache:Default::default(), compose_cache: Default::default() }
     }
 
     // Standard DD operations just delegate to the underlying ZDD. But does not implement DecisionDiagramFactory as it is not really one.
@@ -245,6 +246,7 @@ impl <I> PermutationDecisionDiagramFactory<I> {
 
     pub fn gc(&mut self, keep: impl IntoIterator<Item=NodeIndex>) -> NodeRenaming {
         self.i_cache.clear();
+        self.compose_cache.clear();
         self.zdd.gc(keep)
     }
     /*
@@ -287,26 +289,22 @@ impl PermutationDecisionDiagramFactory<Swap> {
     /// factory.make_dot_file_default_names(&mut std::fs::File::create("swap.gv").unwrap(),"dd",&[(swap13,Some("swap13".to_string())),(swap13_34,Some("swap13_34".to_string())),(swap13_34_14,Some("swap13_34_14".to_string())),(swap34,Some("swap34".to_string()))]);
     /// assert_eq!(swap34,swap13_34_14);
     /// ```
-    pub fn swap(&mut self,node_index:NodeIndex,i:PermutedItem,j:PermutedItem) -> NodeIndex {
-        if i==j { node_index }
-        else if i>j { self.swap(node_index,j,i) }
-        else {
-            assert!(i<j);
-            if node_index.is_false() { NodeIndex::FALSE }
-            else if node_index.is_true() { self.create(self.vars.variable(i,j),NodeIndex::FALSE,NodeIndex::TRUE) }
-            else {
-                let variable = self.vars.variable(i,j);
+    pub fn swap(&mut self, node_index: NodeIndex, i: PermutedItem, j: PermutedItem) -> NodeIndex {
+        if i == j { node_index } else if i > j { self.swap(node_index, j, i) } else {
+            assert!(i < j);
+            if node_index.is_false() { NodeIndex::FALSE } else if node_index.is_true() { self.create(self.vars.variable(i, j), NodeIndex::FALSE, NodeIndex::TRUE) } else {
+                let variable = self.vars.variable(i, j);
                 let node = self.zdd.nodes.node(node_index);
                 let node_variable = self.vars[node.variable];
-                if node_variable.elem2 < j { self.create(variable,NodeIndex::FALSE,node_index)} // this is something lower down the diagram than the variable.
+                if node_variable.elem2 < j { self.create(variable, NodeIndex::FALSE, node_index) } // this is something lower down the diagram than the variable.
                 else {
-                    let cache_key = (node_index,variable);
+                    let cache_key = (node_index, variable);
                     if let Some(cached_answer) = self.i_cache.get(&cache_key) { *cached_answer } else {
-                        let lo = self.swap(node.lo,i,j); // if we don't use node_variable, simple.
-                        let hi1 = self.swap(node.hi,i,if j==node_variable.elem2 {node_variable.elem1} else {j});
-                        let hi = self.swap(hi1,if node_variable.elem1==j {i} else if node_variable.elem1==i {j} else {node_variable.elem1},node_variable.elem2);
-                        let res = self.or(lo,hi);
-                        self.i_cache.insert(cache_key,res);
+                        let lo = self.swap(node.lo, i, j); // if we don't use node_variable, simple.
+                        let hi1 = self.swap(node.hi, i, if j == node_variable.elem2 { node_variable.elem1 } else { j });
+                        let hi = self.swap(hi1, if node_variable.elem1 == j { i } else if node_variable.elem1 == i { j } else { node_variable.elem1 }, node_variable.elem2);
+                        let res = self.or(lo, hi);
+                        self.i_cache.insert(cache_key, res);
                         res
                     }
                 }
@@ -314,4 +312,64 @@ impl PermutationDecisionDiagramFactory<Swap> {
         }
     }
 
+    /// Perform the compose action on a πDD. That is, if p,q represents a set of permutations P,Q respectively,
+    /// then make { p·q | p∈P, q∈Q }
+    /// # Example
+    /// ```
+    /// use xdd::{DecisionDiagramFactory, NodeIndex};
+    /// use xdd::permutation_diagrams::{PermutationDecisionDiagramFactory, Swap};
+    /// let mut factory = PermutationDecisionDiagramFactory::<Swap>::new(4);
+    /// let swap12 = factory.swap(NodeIndex::TRUE,1,2);
+    /// let swap23 = factory.swap(NodeIndex::TRUE,2,3);
+    /// let two = factory.or(swap12,swap23);
+    /// assert_eq!(2,factory.number_solutions::<u64>(two));
+    /// let two_times_two = factory.compose(two,two);
+    /// assert_eq!(3,factory.number_solutions::<u64>(two_times_two));
+    /// let swap14 = factory.swap(NodeIndex::TRUE,1,4);
+    /// let maybe_swap14 = factory.or(swap14,NodeIndex::TRUE);
+    /// let some_mix = factory.compose(maybe_swap14,two_times_two);
+    /// assert_eq!(6,factory.number_solutions::<u64>(some_mix));
+    /// let s_n = factory.construct_all_permutations();
+    /// assert_eq!(24,factory.number_solutions::<u64>(s_n));
+    /// assert_eq!(s_n,factory.compose(s_n,s_n));
+    /// assert_eq!(s_n,factory.compose(s_n,some_mix));
+    /// assert_eq!(s_n,factory.compose(some_mix,s_n));
+    /// ```
+    pub fn compose(&mut self, p: NodeIndex, q: NodeIndex) -> NodeIndex {
+        if p.is_false() || q.is_false() { NodeIndex::FALSE } else if p.is_true() { q } else if q.is_true() { p } else {
+            let cache_key = (p,q);
+            if let Some(cached_answer) = self.compose_cache.get(&cache_key) { *cached_answer } else {
+                let q_node = self.zdd.nodes.node(q);
+                let q_var = self.vars[q_node.variable];
+                let lo = self.compose(p, q_node.lo);
+                let hi = self.compose(p, q_node.hi);
+                let hi = self.swap(hi, q_var.elem1, q_var.elem2);
+                let res = self.or(lo, hi);
+                self.compose_cache.insert(cache_key,res);
+                res
+            }
+        }
+    }
+
+    /// Construct the set of all permutations.
+    /// # Example
+    /// ```
+    /// use xdd::{DecisionDiagramFactory, NodeIndex};
+    /// use xdd::permutation_diagrams::{PermutationDecisionDiagramFactory, Swap};
+    /// let mut factory = PermutationDecisionDiagramFactory::<Swap>::new(4);
+    /// let s_n = factory.construct_all_permutations();
+    /// factory.make_dot_file_default_names(&mut std::fs::File::create("S_4.gv").unwrap(),"Sn",&[(s_n,None)]);
+    /// assert_eq!(24,factory.number_solutions::<u64>(s_n));
+    /// ```
+    pub fn construct_all_permutations(&mut self) -> NodeIndex {
+        let mut res = NodeIndex::TRUE;
+        for i in 1..=self.vars.n {
+            let prev = res;
+            for j in 1..i {
+                let extras = self.swap(prev,j,i);
+                res=self.or(res,extras);
+            }
+        }
+        res
+    }
 }
