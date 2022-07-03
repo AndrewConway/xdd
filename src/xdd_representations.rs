@@ -1,5 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::fmt::Display;
 use std::hash::Hash;
+use std::io::Write;
 use std::ops::Range;
 use crate::{Node, NodeIndex, NodeRenaming, VariableIndex};
 use crate::generating_function::GeneratingFunction;
@@ -406,6 +408,37 @@ pub trait XDDBase {
     /// Returns a renamer from old nodes to new nodes.
     fn gc(&mut self,keep:impl IntoIterator<Item=NodeIndex>) -> NodeRenaming;
 
+    fn make_dot_file<W:Write,F:Fn(VariableIndex)->String>(&self,writer:&mut W,name:impl Display,start_nodes:&[(NodeIndex,Option<String>)],namer:F) -> std::io::Result<()> {
+        //let namer = |i:VariableIndex| i.to_string();
+        fn munge_label(s:&str) -> String { // see if html label.
+            if s.starts_with('<') && s.ends_with('>') {s.to_string()} else { format!("\"{}\"",s) }
+        }
+        writeln!(writer,"digraph {} {{",name)?;
+        let mut pending = Vec::new();
+        for (entry_index,(node,nlabel)) in start_nodes.iter().enumerate() {
+            writeln!(writer,"  e{} -> n{};",entry_index,node.0)?;
+            pending.push(*node);
+            if let Some(label) = nlabel {
+                writeln!(writer,"  e{} [label={}, shape=invtrapezium];",entry_index,munge_label(label))?;
+            }
+        }
+        let mut done : HashSet<NodeIndex> = Default::default();
+        while let Some(index)=pending.pop() {
+            if !(index.is_sink() || done.contains(&index)) {
+                let node = self.node(index);
+                writeln!(writer,"  n{} [label={}, xlabel={}];",index.0,munge_label(&namer(node.variable)),index.0)?;
+                writeln!(writer,"  n{} -> n{} [style=dotted];",index.0,node.lo)?;
+                writeln!(writer,"  n{} -> n{};",index.0,node.hi)?;
+                done.insert(index);
+                pending.push(node.lo);
+                pending.push(node.hi);
+            }
+        }
+        writeln!(writer,"  n0 [label=\"0\",shape=box]")?;
+        writeln!(writer,"  n1 [label=\"1\",shape=box]")?;
+        writeln!(writer,"}}")?;
+        Ok(())
+    }
 }
 
 

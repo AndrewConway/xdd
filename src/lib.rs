@@ -12,9 +12,11 @@
 
 pub mod xdd_representations;
 pub mod generating_function;
+pub mod permutation_diagrams;
 
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use std::io::Write;
 use crate::generating_function::GeneratingFunction;
 use crate::xdd_representations::{NodeListWithFastLookup, XDDBase};
 
@@ -117,6 +119,8 @@ pub trait DecisionDiagramFactory {
         }
         res
     }
+    /// write a graph file to the given writer with a given name showing the DD starting from start_nodes.
+    fn make_dot_file<W:Write,F:Fn(VariableIndex)->String>(&self,writer:&mut W,name:impl Display,start_nodes:&[(NodeIndex,Option<String>)],namer:F) -> std::io::Result<()>;
 }
 
 /// A factory that can do efficient operations on BDDs.
@@ -171,6 +175,10 @@ impl DecisionDiagramFactory for BDDFactory {
 
     fn exactly_one_of(&mut self, variables: &[VariableIndex]) -> NodeIndex {
         self.nodes.exactly_one_of_bdd(variables)
+    }
+
+    fn make_dot_file<W:Write,F:Fn(VariableIndex)->String>(&self,writer:&mut W,name:impl Display,start_nodes:&[(NodeIndex,Option<String>)],namer:F) -> std::io::Result<()> {
+        self.nodes.make_dot_file(writer,name,start_nodes,namer)
     }
 }
 
@@ -230,6 +238,10 @@ impl DecisionDiagramFactory for ZDDFactory {
     fn exactly_one_of(&mut self, variables: &[VariableIndex]) -> NodeIndex {
         self.nodes.exactly_one_of_zdd(variables,self.num_variables)
     }
+
+    fn make_dot_file<W:Write,F:Fn(VariableIndex)->String>(&self,writer:&mut W,name:impl Display,start_nodes:&[(NodeIndex,Option<String>)],namer:F) -> std::io::Result<()> {
+        self.nodes.make_dot_file(writer,name,start_nodes,namer)
+    }
 }
 
 pub struct NodeRenaming(Vec<NodeIndex>);
@@ -238,16 +250,5 @@ impl NodeRenaming {
     pub fn rename(&self,index:NodeIndex) -> Option<NodeIndex> {
         let res = self.0[index.0 as usize];
         if res==NodeIndex::JUNK { None } else { Some(res) }
-    }
-}
-
-
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
     }
 }
