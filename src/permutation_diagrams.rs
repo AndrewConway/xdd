@@ -263,7 +263,7 @@ impl <I> PermutationDecisionDiagramFactory<I> {
 
 }
 
-impl PermutationDecisionDiagramFactory<Swap> {
+impl <T> PermutationDecisionDiagramFactory<T> where PermutationElement<T>:Display {
     pub fn make_dot_file_default_names<W:Write>(&self,writer:&mut W,name:impl Display,start_nodes:&[(NodeIndex,Option<String>)]) -> std::io::Result<()> {
         self.zdd.make_dot_file(writer,name,start_nodes,|v|self.vars[v].to_string())
     }
@@ -367,6 +367,126 @@ impl PermutationDecisionDiagramFactory<Swap> {
             let prev = res;
             for j in 1..i {
                 let extras = self.swap(prev,j,i);
+                res=self.or(res,extras);
+            }
+        }
+        res
+    }
+}
+
+impl PermutationDecisionDiagramFactory<LeftRotation> {
+    /// Perform the SWAP operation on a Rot-πDD. That is, convert the permutations
+    /// considered by the tree starting at node to another one with the addition
+    /// of the left rotation ρ(i,j)
+    ///
+    /// This must be done in a way to preserve the validity of the tree.
+    /// See algorithm 4.1.1 in Yuma Inoue's thesis. (although the result, line 24/25 is done via a call to left_rot and OR which saves some generalization of checking l and r..
+    /// # Example
+    /// ```
+    /// use xdd::{DecisionDiagramFactory, NodeIndex};
+    /// use xdd::permutation_diagrams::{PermutationDecisionDiagramFactory, LeftRotation};
+    /// let mut factory = PermutationDecisionDiagramFactory::<LeftRotation>::new(4);
+    /// assert_eq!(factory.len(),0);
+    /// let rot13 = factory.left_rot(NodeIndex::TRUE,1,3);
+    /// assert_eq!(factory.len(),1);
+    /// let rot13_13 = factory.left_rot(rot13,1,3);  // rotating by 13 twice is the same as 2-3 and then 1-2.
+    /// let rot13_13_13 = factory.left_rot(rot13_13,1,3);  // rotating by 13 3 times is the identity.
+    /// let rot23 = factory.left_rot(NodeIndex::TRUE,2,3);
+    /// let rot23_12 = factory.left_rot(rot23,1,2);
+    /// let rot12 = factory.left_rot(NodeIndex::TRUE,1,2);
+    /// let rot12_23 = factory.left_rot(rot12,2,3);
+    /// factory.make_dot_file_default_names(&mut std::fs::File::create("rot.gv").unwrap(),"dd",&[(rot13,Some("rot13".to_string())),(rot13_13,Some("rot13_13".to_string())),(rot13_13_13,Some("rot13_13_13".to_string())),(rot23,Some("rot23".to_string())),(rot23_12,Some("rot23_12".to_string())),(rot12_23,Some("rot12_23".to_string()))]);
+    /// assert_eq!(rot13,rot23_12);
+    /// assert_eq!(rot13_13,rot12_23);
+    /// assert_eq!(NodeIndex::TRUE,factory.left_rot(rot13_13,1,3));
+    /// ```
+    pub fn left_rot(&mut self, node_index: NodeIndex, l: PermutedItem, r: PermutedItem) -> NodeIndex {
+        if l == r { node_index } else if l > r { self.left_rot(node_index, r, l) } else {
+            assert!(l < r);
+            assert!(r <=self.vars.n);
+            if node_index.is_false() { NodeIndex::FALSE } else if node_index.is_true() { self.create(self.vars.variable(l, r), NodeIndex::FALSE, NodeIndex::TRUE) } else {
+                let variable = self.vars.variable(l, r);
+                let node = self.zdd.nodes.node(node_index);
+                let node_variable = self.vars[node.variable]; // in YI's notation, x=node_variable.elem1, y=node_variable.elem2.
+                if node_variable.elem2 < r { self.create(variable, NodeIndex::FALSE, node_index) } // this is something lower down the diagram than the variable.
+                else {
+                    let cache_key = (node_index, variable);
+                    if let Some(cached_answer) = self.i_cache.get(&cache_key) { *cached_answer } else {
+                        // Let P = ( ρ_x,y , P_0 , P_1 ). = P_0 + P_1.left_rot(x,y)
+                        // so result = P_0.left_rot(l,r) + P_1.left_rot(x,y).left_rot(l,r)
+                        // theorem 4.1.1 in Yuma Inoue's theis says ρ_x,y ρ_l,r can be transformed into the form of ρ_l′,r′ ρ_x′,y with r′< y
+                        let lo = self.left_rot(node.lo, l, r); // if we don't use node_variable, simple. This is P′0 in YI's notation.
+                        // hi computed here is P′1 in YI's notation
+                        let (x_prime,hi) = if r <node_variable.elem1 { (node_variable.elem1, self.left_rot(node.hi, l, r))}
+                        else if r ==node_variable.elem1 { (l, node.hi) }
+                        else if l<=node_variable.elem1 { (node_variable.elem1+1,self.left_rot(node.hi, l, r -1))}
+                        else { (node_variable.elem1,self.left_rot(node.hi, l-1, r -1)) };
+                        // now the algorithm 4.1.1 says the result should be (ρ_x′,y , P′0 , P′1) (where y = node_variable.elem2). But I don't understand why ρ_x′,y comes before anything in P'0, and I need to deal with x'=y or x'>y, which is dealt with by the following code in a general way without significant cost if true anyway.
+                        let hi = self.left_rot(hi,x_prime,node_variable.elem2);
+                        let res = self.or(lo,hi);
+                        self.i_cache.insert(cache_key, res);
+                        res
+                    }
+                }
+            }
+        }
+    }
+
+    /// Perform the compose action on a Rot-πDD. That is, if p,q represents a set of permutations P,Q respectively,
+    /// then make { p·q | p∈P, q∈Q }
+    /// # Example
+    /// ```
+    /// use xdd::{DecisionDiagramFactory, NodeIndex};
+    /// use xdd::permutation_diagrams::{PermutationDecisionDiagramFactory, LeftRotation};
+    /// let mut factory = PermutationDecisionDiagramFactory::<LeftRotation>::new(4);
+    /// let rot12 = factory.left_rot(NodeIndex::TRUE,1,2);
+    /// let rot23 = factory.left_rot(NodeIndex::TRUE,2,3);
+    /// let two = factory.or(rot12,rot23);
+    /// assert_eq!(2,factory.number_solutions::<u64>(two));
+    /// let two_times_two = factory.compose(two,two);
+    /// assert_eq!(3,factory.number_solutions::<u64>(two_times_two));
+    /// let rot14 = factory.left_rot(NodeIndex::TRUE,1,4);
+    /// let maybe_rot14 = factory.or(rot14,NodeIndex::TRUE);
+    /// let some_mix = factory.compose(maybe_rot14,two_times_two);
+    /// assert_eq!(6,factory.number_solutions::<u64>(some_mix));
+    /// let s_n = factory.construct_all_permutations();
+    /// assert_eq!(24,factory.number_solutions::<u64>(s_n));
+    /// assert_eq!(s_n,factory.compose(s_n,s_n));
+    /// assert_eq!(s_n,factory.compose(s_n,some_mix));
+    /// assert_eq!(s_n,factory.compose(some_mix,s_n));
+    /// ```
+    pub fn compose(&mut self, p: NodeIndex, q: NodeIndex) -> NodeIndex {
+        if p.is_false() || q.is_false() { NodeIndex::FALSE } else if p.is_true() { q } else if q.is_true() { p } else {
+            let cache_key = (p,q);
+            if let Some(cached_answer) = self.compose_cache.get(&cache_key) { *cached_answer } else {
+                let q_node = self.zdd.nodes.node(q);
+                let q_var = self.vars[q_node.variable];
+                let lo = self.compose(p, q_node.lo);
+                let hi = self.compose(p, q_node.hi);
+                let hi = self.left_rot(hi, q_var.elem1, q_var.elem2);
+                let res = self.or(lo, hi);
+                self.compose_cache.insert(cache_key,res);
+                res
+            }
+        }
+    }
+
+    /// Construct the set of all permutations.
+    /// # Example
+    /// ```
+    /// use xdd::{DecisionDiagramFactory, NodeIndex};
+    /// use xdd::permutation_diagrams::{PermutationDecisionDiagramFactory, LeftRotation};
+    /// let mut factory = PermutationDecisionDiagramFactory::<LeftRotation>::new(4);
+    /// let s_n = factory.construct_all_permutations();
+    /// factory.make_dot_file_default_names(&mut std::fs::File::create("rot_S_4.gv").unwrap(),"Sn",&[(s_n,None)]);
+    /// assert_eq!(24,factory.number_solutions::<u64>(s_n));
+    /// ```
+    pub fn construct_all_permutations(&mut self) -> NodeIndex {
+        let mut res = NodeIndex::TRUE;
+        for i in 1..=self.vars.n {
+            let prev = res;
+            for j in 1..i {
+                let extras = self.left_rot(prev,j,i);
                 res=self.or(res,extras);
             }
         }
