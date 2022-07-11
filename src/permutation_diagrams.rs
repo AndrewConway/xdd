@@ -134,6 +134,33 @@ impl <I> PermutationElement<I> {
     }
 }
 
+impl PermutationElement<LeftRotation> {
+    /// Get a collection of LeftRotations that produce the given permutation.
+    /// panics if the permutation argument is not a permutation of 1..n.
+    /// # Example (see example 4.1.2 in Yuma Inoue's thesis)
+    /// ```
+    /// use xdd::permutation_diagrams::{LeftRotation, PermutationElement};
+    /// let res = PermutationElement::<LeftRotation>::get_permutation(&[4, 3, 1, 5, 2]);
+    /// assert_eq!(res,vec![PermutationElement::new(2,5),PermutationElement::new(1,3),PermutationElement::new(1,2)])
+    /// ```
+    pub fn get_permutation(permutation:&[PermutedItem]) -> Vec<Self> {
+        let n = permutation.len();
+        let mut res = Vec::new();
+        let mut sofar : Vec<PermutedItem> = (1..=n as PermutedItem).collect();
+        for j in (0..n).rev() {
+            // make sure element j is correct.
+            if permutation[j]!=sofar[j] {
+                let position = sofar.iter().position(|&e|e==permutation[j]).expect("Input was not a permutation");
+                assert!(position<j);
+                res.push(PermutationElement::new((position+1) as PermutedItem,(j+1) as PermutedItem)); // +1 as PermutedItem is 1 based, and position and j are 0 based.
+                let extracted = sofar.remove(position);
+                sofar.insert(j,extracted);
+            }
+        }
+        res
+    }
+}
+
 /// Convert ASCII digits in a string to subscripts.
 fn subscript(s:String) -> String {
     s.chars().map(|c|if c.is_ascii_digit() {char::from_u32(c as u32-'0' as u32+'₀' as u32).unwrap_or(c)} else {c}).collect()
@@ -489,6 +516,17 @@ impl PermutationDecisionDiagramFactory<LeftRotation> {
                 let extras = self.left_rot(prev,j,i);
                 res=self.or(res,extras);
             }
+        }
+        res
+    }
+
+    /// Get a set containing the single specified permutation.
+    /// panics if the permutation argument is not a permutation of 1..n.
+    pub fn compute_for_single_permutation(&mut self,permutation:&[PermutedItem]) -> NodeIndex {
+        let decomposition = PermutationElement::<LeftRotation>::get_permutation(permutation);
+        let mut res = NodeIndex::TRUE;
+        for e in decomposition.iter().rev() {
+            res = self.left_rot(res,e.elem1,e.elem2);
         }
         res
     }
