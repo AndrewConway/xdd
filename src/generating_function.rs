@@ -1,5 +1,7 @@
 use std::fmt::Debug;
-use crate::VariableIndex;
+use std::ops::Mul;
+use num::Integer;
+use crate::{NoMultiplicity, VariableIndex};
 
 /// A Generating Function is some aggregate of the variables. This could be:
 ///  * An integer, being the number of solutions.
@@ -30,6 +32,16 @@ pub trait GeneratingFunction : Sized + Clone + Debug {
     }
 }
 
+/// A generating function that can also multiply itself by some constant.
+pub trait GeneratingFunctionWithMultiplicity<M> : GeneratingFunction {
+    /// multiply self by M.
+    fn multiply(self,multiple:M) -> Self;
+}
+
+impl <G:GeneratingFunction> GeneratingFunctionWithMultiplicity<NoMultiplicity> for G {
+    fn multiply(self, _multiple: NoMultiplicity) -> Self { self }
+}
+
 /// A simple generating function that separates counts by the number of variables set.
 impl GeneratingFunction for u64 {
     fn zero() -> Self { 0 }
@@ -45,6 +57,16 @@ impl GeneratingFunction for u128 {
     fn add(self, other: Self) -> Self { self+other }
     fn variable_set(self, _variable: VariableIndex) -> Self { self }
 }
+
+impl <G:GeneratingFunction,I:Into<G>+Ord> GeneratingFunctionWithMultiplicity<I> for G // The requirement on Ord is to prevent a possible clash with NoMultiplicity.
+    where G:Mul<G,Output=G>,
+{
+
+    fn multiply(self, multiple: I) -> Self {
+        self*multiple.into()
+    }
+}
+
 
 
 #[derive(Clone,Eq, PartialEq,Debug)]
@@ -77,6 +99,16 @@ impl GeneratingFunction for SingleVariableGeneratingFunction {
     }
 }
 
+impl <M:Copy+Integer+TryInto<u64>> GeneratingFunctionWithMultiplicity<M> for SingleVariableGeneratingFunction {
+    fn multiply(self, multiple: M) -> Self {
+        let mut res = self;
+        let multiple : u64 = multiple.try_into().map_err(|_|()).expect("Could not convert multiplicity into generating function element type");
+        for i in 0..res.0.len() {
+            res.0[i]*=multiple;
+        }
+        res
+    }
+}
 
 #[derive(Clone,Eq, PartialEq,Debug)]
 /// a generating function with a fixed maximum length
