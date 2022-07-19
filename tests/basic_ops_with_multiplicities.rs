@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 //use std::fs::File;
-use xdd::{NodeIndexWithMultiplicity, NoMultiplicity, VariableIndex};
+use xdd::{NodeIndex, NoMultiplicity, VariableIndex};
 use xdd::generating_function::{GeneratingFunctionSplitByMultiplicity, SingleVariableGeneratingFunction};
 use xdd::xdd_with_multiplicity::{NodeList, NodeListWithFastLookup, XDDBase};
 
@@ -41,8 +41,8 @@ fn zdd_basic_ops<F:XDDBase<usize, NoMultiplicity>+Default>() {
     assert_eq!(4,factory.len());
     assert!(!not_v0.is_sink());
     assert_eq!(VariableIndex(1),factory.node_incorporating_multiplicity(not_v0).variable);
-    assert_eq!(NodeIndexWithMultiplicity::TRUE,factory.node_incorporating_multiplicity(not_v0).hi);
-    assert_eq!(NodeIndexWithMultiplicity::TRUE,factory.node_incorporating_multiplicity(not_v0).lo);
+    assert_eq!(NodeIndex::TRUE, factory.node_incorporating_multiplicity(not_v0).hi);
+    assert_eq!(NodeIndex::TRUE, factory.node_incorporating_multiplicity(not_v0).lo);
     assert_eq!(true,factory.evaluate_zdd(not_v0,&[false,false]));
     assert_eq!(false,factory.evaluate_zdd(not_v0,&[true,false]));
     assert_eq!(true,factory.evaluate_zdd(not_v0,&[false,true]));
@@ -79,8 +79,8 @@ fn zdd_basic_ops<F:XDDBase<usize, NoMultiplicity>+Default>() {
     assert_eq!(1,factory.number_solutions_zdd::<u64>(and_v0_v1,2));
     assert_eq!(3,factory.number_solutions_zdd::<u64>(or_v0_v1,2));
 
-    assert_eq!(SingleVariableGeneratingFunction(vec![1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndexWithMultiplicity::TRUE,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndexWithMultiplicity::FALSE,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndex::TRUE, 2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndex::FALSE, 2));
     assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(v1,2));
     assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(v0,2));
     assert_eq!(SingleVariableGeneratingFunction(vec![1,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(not_v0,2));
@@ -151,8 +151,8 @@ fn multiplicities_zdd_basic_ops<F:XDDBase<usize, u32>+Default>() {
     assert_eq!(4,factory.len());
     assert!(!not_v0.is_sink());
     assert_eq!(VariableIndex(1),factory.node_incorporating_multiplicity(not_v0).variable);
-    assert_eq!(NodeIndexWithMultiplicity::TRUE,factory.node_incorporating_multiplicity(not_v0).hi);
-    assert_eq!(NodeIndexWithMultiplicity::TRUE,factory.node_incorporating_multiplicity(not_v0).lo);
+    assert_eq!(NodeIndex::TRUE, factory.node_incorporating_multiplicity(not_v0).hi);
+    assert_eq!(NodeIndex::TRUE, factory.node_incorporating_multiplicity(not_v0).lo);
     assert_eq!(true,factory.evaluate_zdd(not_v0,&[false,false]));
     assert_eq!(false,factory.evaluate_zdd(not_v0,&[true,false]));
     assert_eq!(true,factory.evaluate_zdd(not_v0,&[false,true]));
@@ -189,8 +189,8 @@ fn multiplicities_zdd_basic_ops<F:XDDBase<usize, u32>+Default>() {
     assert_eq!(1,factory.number_solutions_zdd::<u64>(and_v0_v1,2));
     assert_eq!(4,factory.number_solutions_zdd::<u64>(or_v0_v1,2));
 
-    assert_eq!(SingleVariableGeneratingFunction(vec![1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndexWithMultiplicity::TRUE,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndexWithMultiplicity::FALSE,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndex::TRUE, 2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndex::FALSE, 2));
     assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(v1,2));
     assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(v0,2));
     assert_eq!(SingleVariableGeneratingFunction(vec![1,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(not_v0,2));
@@ -285,8 +285,8 @@ fn bdd_basic_ops<F:XDDBase<usize, NoMultiplicity>+Default>() {
     assert_eq!(true,factory.evaluate_bdd(not_and_v0_v1,&[false,true]));
     assert_eq!(false,factory.evaluate_bdd(not_and_v0_v1,&[true,true]));
 
-    assert_eq!(NodeIndexWithMultiplicity::FALSE,factory.mul_bdd(not_and_v0_v1,and_v0_v1,&mut HashMap::new()));
-    assert_eq!(NodeIndexWithMultiplicity::FALSE,factory.mul_bdd(v0,not_v0,&mut HashMap::new()));
+    assert_eq!(NodeIndex::FALSE, factory.mul_bdd(not_and_v0_v1, and_v0_v1, &mut HashMap::new()));
+    assert_eq!(NodeIndex::FALSE, factory.mul_bdd(v0, not_v0, &mut HashMap::new()));
     assert_eq!(6,factory.len());
 
     let or_v0_v1 = factory.sum_bdd(v0,v1,&mut HashMap::new());
@@ -308,8 +308,8 @@ fn bdd_basic_ops<F:XDDBase<usize, NoMultiplicity>+Default>() {
     assert_eq!(3,factory.number_solutions_bdd::<u64>(not_and_v0_v1,2));
     //assert_eq!(3,factory.number_solutions_bdd::<u64>(or_v0_v1,2));
 
-    assert_eq!(SingleVariableGeneratingFunction(vec![1,2,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndexWithMultiplicity::TRUE,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndexWithMultiplicity::FALSE,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![1,2,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndex::TRUE, 2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndex::FALSE, 2));
     assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(v1,2));
     assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(v0,2));
     assert_eq!(SingleVariableGeneratingFunction(vec![1,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(not_v0,2));
@@ -403,8 +403,8 @@ fn bdd_basic_ops_with_multiplicities<F:XDDBase<usize, u32>+Default>() {
     assert_eq!(true,factory.evaluate_bdd(not_and_v0_v1,&[false,true]));
     assert_eq!(false,factory.evaluate_bdd(not_and_v0_v1,&[true,true]));
 
-    assert_eq!(NodeIndexWithMultiplicity::FALSE,factory.mul_bdd(not_and_v0_v1,and_v0_v1,&mut HashMap::new()));
-    assert_eq!(NodeIndexWithMultiplicity::FALSE,factory.mul_bdd(v0,not_v0,&mut HashMap::new()));
+    assert_eq!(NodeIndex::FALSE, factory.mul_bdd(not_and_v0_v1, and_v0_v1, &mut HashMap::new()));
+    assert_eq!(NodeIndex::FALSE, factory.mul_bdd(v0, not_v0, &mut HashMap::new()));
     assert_eq!(6,factory.len());
 
     let or_v0_v1 = factory.sum_bdd(v0,v1,&mut HashMap::new());
@@ -426,8 +426,8 @@ fn bdd_basic_ops_with_multiplicities<F:XDDBase<usize, u32>+Default>() {
     assert_eq!(3,factory.number_solutions_bdd::<u64>(not_and_v0_v1,2));
     //assert_eq!(3,factory.number_solutions_bdd::<u64>(or_v0_v1,2));
 
-    assert_eq!(SingleVariableGeneratingFunction(vec![1,2,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndexWithMultiplicity::TRUE,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndexWithMultiplicity::FALSE,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![1,2,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndex::TRUE, 2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndex::FALSE, 2));
     assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(v1,2));
     assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(v0,2));
     assert_eq!(SingleVariableGeneratingFunction(vec![1,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(not_v0,2));

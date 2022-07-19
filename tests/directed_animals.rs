@@ -12,7 +12,7 @@
 
 
 use std::collections::HashMap;
-use xdd::{BDDFactoryWithMultiplicity, DecisionDiagramFactoryWithMultiplicity, NodeIndexWithMultiplicity, NoMultiplicity, VariableIndex, ZDDFactoryWithMultiplicity};
+use xdd::{BDDFactory, DecisionDiagramFactory, NodeIndex, NoMultiplicity, VariableIndex, ZDDFactory};
 use xdd::generating_function::{SingleVariableGeneratingFunctionFixedLength};
 
 #[test]
@@ -50,11 +50,11 @@ fn variable_number(x:u16,y:u16) -> VariableIndex {
 
 
 /// Count using a decision diagram
-fn count_xdd<F:DecisionDiagramFactoryWithMultiplicity<u32,NoMultiplicity>>() {
+fn count_xdd<F: DecisionDiagramFactory<u32,NoMultiplicity>>() {
     let terms_wanted = 13;
     let num_variables = variable_number(0,terms_wanted).0;
     let mut factory = F::new(num_variables);
-    let mut function : Option<NodeIndexWithMultiplicity<u32,NoMultiplicity>> = None;
+    let mut function : Option<NodeIndex<u32,NoMultiplicity>> = None;
     for x in 0..terms_wanted {
         for y in 0..(terms_wanted-x) {
             // println!("Working on node ({},{})",x,y);
@@ -62,8 +62,8 @@ fn count_xdd<F:DecisionDiagramFactoryWithMultiplicity<u32,NoMultiplicity>>() {
             if x>0 || y>0 {
                 let variable_here = factory.single_variable(variable_number(x,y));
                 let not_variable_here = factory.not(variable_here);
-                let left = if x>0 { factory.single_variable(variable_number(x-1,y)) } else { NodeIndexWithMultiplicity::FALSE };
-                let below = if y>0 { factory.single_variable(variable_number(x,y-1)) } else { NodeIndexWithMultiplicity::FALSE };
+                let left = if x>0 { factory.single_variable(variable_number(x-1,y)) } else { NodeIndex::FALSE };
+                let below = if y>0 { factory.single_variable(variable_number(x,y-1)) } else { NodeIndex::FALSE };
                 let prior = factory.or(left,below);
                 let term = factory.or(prior,not_variable_here);
                 function = Some(if let Some(f) = function {factory.and(term,f)} else {term});
@@ -96,10 +96,10 @@ fn count_xdd<F:DecisionDiagramFactoryWithMultiplicity<u32,NoMultiplicity>>() {
 
 #[test]
 fn count_bdd() {
-    count_xdd::<BDDFactoryWithMultiplicity<u32,NoMultiplicity>>()
+    count_xdd::<BDDFactory<u32,NoMultiplicity>>()
 }
 
 #[test]
 fn count_zdd() {
-    count_xdd::<ZDDFactoryWithMultiplicity<u32,NoMultiplicity>>()
+    count_xdd::<ZDDFactory<u32,NoMultiplicity>>()
 }

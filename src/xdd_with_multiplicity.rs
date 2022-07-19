@@ -8,7 +8,7 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::io::Write;
 use std::ops::Range;
-use crate::{NodeWithMultiplicity, NodeIndexWithMultiplicity, VariableIndex, NodeAddress, Multiplicity, NodeRenamingWithMuliplicity};
+use crate::{Node, NodeIndex, VariableIndex, NodeAddress, Multiplicity, NodeRenaming};
 use crate::generating_function::{GeneratingFunctionWithMultiplicity};
 
 /// Functions that any representation of an XDD must have, although some representations
@@ -17,46 +17,46 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
     /// Get the node pointed to by a NodeIndex. panic if it does not exist.
     /// Do NOT call with the two special node indices NodeIndex::TRUE or NodeIndex::FALSE
     /// Also nodes should be sorted topologically - that is, node(x).hi>x and node(x).lo>x for all x.
-    fn node(&self,index:A) -> NodeWithMultiplicity<A,M>;
+    fn node(&self,index:A) -> Node<A,M>;
     /// Get the node index for a node if it is already present.
-    fn find_node_index(&self,node:NodeWithMultiplicity<A,M>) -> Option<A>;
+    fn find_node_index(&self, node: Node<A,M>) -> Option<A>;
     /// Add a node to the list, returning its new index.
-    fn add_node(&mut self,node:NodeWithMultiplicity<A,M>) -> A;
+    fn add_node(&mut self, node: Node<A,M>) -> A;
     /// The number of nodes in this tree, not counting the two special node indices.
     fn len(&self) -> usize;
 
     /// Like add_node, but first check with find_node_index to see if it is already there. Also canonicalize multiplicities by removing gcd.
-    fn add_node_if_not_present(&mut self,node:NodeWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M> {
+    fn add_node_if_not_present(&mut self, node: Node<A,M>) -> NodeIndex<A,M> {
         let (node,multiplicity) = if M::MULTIPLICITIES_IRRELEVANT { (node,M::ONE) }
         else { // for uniqueness, want to make sure that there is no gcd of the hi and lo values.
             let (m_lo,m_hi,multiplicity) =
                 if node.hi.is_false() { (M::ONE,M::ONE,node.lo.multiplicity) } // note that for the false node, multiplicity is irrelevant, and so gcd has to account for that.
                 else if node.lo.is_false() { (M::ONE,M::ONE,node.hi.multiplicity) }
                 else { M::gcd(node.lo.multiplicity,node.hi.multiplicity) };
-            let node = NodeWithMultiplicity{ variable:node.variable, lo: NodeIndexWithMultiplicity{ address: node.lo.address, multiplicity: m_lo }, hi: NodeIndexWithMultiplicity{ address: node.hi.address, multiplicity: m_hi } };
+            let node = Node { variable:node.variable, lo: NodeIndex { address: node.lo.address, multiplicity: m_lo }, hi: NodeIndex { address: node.hi.address, multiplicity: m_hi } };
             (node,multiplicity)
         };
         let address = self.find_node_index(node).unwrap_or_else(||self.add_node(node));
-        NodeIndexWithMultiplicity{address,multiplicity}
+        NodeIndex {address,multiplicity}
     }
 
     /// Produce a DD that describes a single variable. That is, a DD that has just that variable leading to TRUE iff variable is true.
     /// * For a BDD, this is a simple function f(v,...)=v.
     /// * For a ZDD, this means a function f(v,...) = v & !(union of all other variables).
-    fn single_variable(&mut self,variable:VariableIndex) -> NodeIndexWithMultiplicity<A,M> {
-        self.add_node_if_not_present(NodeWithMultiplicity{variable,lo:NodeIndexWithMultiplicity::FALSE,hi:NodeIndexWithMultiplicity::TRUE})
+    fn single_variable(&mut self,variable:VariableIndex) -> NodeIndex<A,M> {
+        self.add_node_if_not_present(Node {variable,lo: NodeIndex::FALSE,hi: NodeIndex::TRUE})
     }
 
     /// Produce a ZDD that describes a single variable. That is, a ZDD that has all variables having no effect other than just that variable leading to TRUE iff variable is true.
     /// * For a ZDD, this is a simple function f(v,...)=v.
     /// * This is not a valid BDD.
-    fn single_variable_zdd(&mut self,variable:VariableIndex,total_num_variables:u16) -> NodeIndexWithMultiplicity<A,M> {
-        let mut index = NodeIndexWithMultiplicity::TRUE;
+    fn single_variable_zdd(&mut self,variable:VariableIndex,total_num_variables:u16) -> NodeIndex<A,M> {
+        let mut index = NodeIndex::TRUE;
         for i in (0..total_num_variables).rev() {
             let v = VariableIndex(i);
-            index = self.add_node_if_not_present(NodeWithMultiplicity {
+            index = self.add_node_if_not_present(Node {
                 variable : v,
-                lo: if v==variable { NodeIndexWithMultiplicity::FALSE } else { index },
+                lo: if v==variable { NodeIndex::FALSE } else { index },
                 hi: index,
             });
         }
@@ -65,35 +65,35 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
 
     /// Produce a BDD which is true iff exactly 1 of the given variables is true, regardless of other variables.
     /// The variables array must be sorted, smallest to highest.
-    fn exactly_one_of_bdd(&mut self,variables:&[VariableIndex]) -> NodeIndexWithMultiplicity<A,M> {
-        if variables.len()==0 { NodeIndexWithMultiplicity::FALSE } else {
-            let mut right = NodeIndexWithMultiplicity::TRUE;
-            let mut left = NodeIndexWithMultiplicity::FALSE;
+    fn exactly_one_of_bdd(&mut self,variables:&[VariableIndex]) -> NodeIndex<A,M> {
+        if variables.len()==0 { NodeIndex::FALSE } else {
+            let mut right = NodeIndex::TRUE;
+            let mut left = NodeIndex::FALSE;
             // The diagram that is needed has two parallel diagonal lines, one right, one left.
             // One is on the right if one has had exactly 1 variable, one is on the left if one has had 0 variables.
             for &variable in variables.into_iter().rev() {
-                left = self.add_node_if_not_present(NodeWithMultiplicity{variable,lo:left,hi:right});
+                left = self.add_node_if_not_present(Node {variable,lo:left,hi:right});
                 if variable==variables[0] { return left; }
-                right = self.add_node_if_not_present(NodeWithMultiplicity{variable,lo:right,hi:NodeIndexWithMultiplicity::FALSE});
+                right = self.add_node_if_not_present(Node {variable,lo:right,hi: NodeIndex::FALSE});
             }
             panic!("Never got to the first variable.");
         }
     }
 
-    fn zdd_variables_in_range_dont_matter(&mut self,base:NodeIndexWithMultiplicity<A,M>,range:Range<u16>) -> NodeIndexWithMultiplicity<A,M> {
+    fn zdd_variables_in_range_dont_matter(&mut self, base: NodeIndex<A,M>, range:Range<u16>) -> NodeIndex<A,M> {
         let mut res = base;
         for v in range.rev() {
-            res=self.add_node_if_not_present(NodeWithMultiplicity{variable:VariableIndex(v),lo:res,hi:res});
+            res=self.add_node_if_not_present(Node {variable:VariableIndex(v),lo:res,hi:res});
         }
         res
     }
 
     /// Produce a ZDD which is true iff exactly 1 of the given variables is true, regardless of other variables.
     /// The variables array must be sorted, smallest to highest.
-    fn exactly_one_of_zdd(&mut self,variables:&[VariableIndex],total_num_variables:u16) -> NodeIndexWithMultiplicity<A,M> {
-        if variables.len()==0 { NodeIndexWithMultiplicity::FALSE } else {
-            let mut right = NodeIndexWithMultiplicity::TRUE;
-            let mut left = NodeIndexWithMultiplicity::FALSE;
+    fn exactly_one_of_zdd(&mut self,variables:&[VariableIndex],total_num_variables:u16) -> NodeIndex<A,M> {
+        if variables.len()==0 { NodeIndex::FALSE } else {
+            let mut right = NodeIndex::TRUE;
+            let mut left = NodeIndex::FALSE;
             let mut dealt_with = total_num_variables;
             // The diagram that is needed has two parallel diagonal lines, one right, one left.
             // One is on the right if one has had exactly 1 variable, one is on the left if one has had 0 variables.
@@ -101,9 +101,9 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
                 left = self.zdd_variables_in_range_dont_matter(left,variable.0+1..dealt_with);
                 right = self.zdd_variables_in_range_dont_matter(right,variable.0+1..dealt_with);
                 dealt_with = variable.0;
-                left = self.add_node_if_not_present(NodeWithMultiplicity{variable,lo:left,hi:right});
+                left = self.add_node_if_not_present(Node {variable,lo:left,hi:right});
                 if variable==variables[0] { return self.zdd_variables_in_range_dont_matter(left,0..dealt_with); }
-                right = self.add_node_if_not_present(NodeWithMultiplicity{variable,lo:right,hi:NodeIndexWithMultiplicity::FALSE});
+                right = self.add_node_if_not_present(Node {variable,lo:right,hi: NodeIndex::FALSE});
             }
             panic!("Never got to the first variable.");
         }
@@ -113,11 +113,11 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
     /// This is a long chain of variables from upto (inclusive) to total_num_variables (exclusive)
     /// where each elememt points to the next with both hi and lo, and the final field is NodeIndex::TRUE
     /// TODO cache.
-    fn true_regardless_of_variables_below_zdd(&mut self,upto:VariableIndex,total_num_variables:u16) -> NodeIndexWithMultiplicity<A,M> {
-        let mut index = NodeIndexWithMultiplicity::TRUE;
+    fn true_regardless_of_variables_below_zdd(&mut self,upto:VariableIndex,total_num_variables:u16) -> NodeIndex<A,M> {
+        let mut index = NodeIndex::TRUE;
         for i in (upto.0..total_num_variables).rev() {
             let v = VariableIndex(i as u16);
-            index = self.add_node_if_not_present(NodeWithMultiplicity{
+            index = self.add_node_if_not_present(Node {
                 variable : v,
                 lo: index,
                 hi: index,
@@ -126,7 +126,7 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
         index
     }
 
-    fn print_with_indentation(&self,index:NodeIndexWithMultiplicity<A,M>,indentation:usize) {
+    fn print_with_indentation(&self, index: NodeIndex<A,M>, indentation:usize) {
         print!("{: <1$}", "", indentation);
         if index.is_sink() { println!("{}",if index.is_true() {1} else {0}); }
         else {
@@ -137,12 +137,12 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
             self.print_with_indentation(node.lo,indentation+1);
         }
     }
-    fn print(&self,index:NodeIndexWithMultiplicity<A,M>) {
+    fn print(&self,index: NodeIndex<A,M>) {
         self.print_with_indentation(index,0);
     }
 
     /// Evaluate as a BDD with given variables.
-    fn evaluate_bdd(&self,index:NodeIndexWithMultiplicity<A,M>,variables:&[bool]) -> bool {
+    fn evaluate_bdd(&self, index: NodeIndex<A,M>, variables:&[bool]) -> bool {
         let mut index = index;
         while !index.is_sink() {
             let node = self.node(index.address);
@@ -152,7 +152,7 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
     }
 
     /// Evaluate as a ZDD with given variables.
-    fn evaluate_zdd(&self,index:NodeIndexWithMultiplicity<A,M>,variables:&[bool]) -> bool {
+    fn evaluate_zdd(&self, index: NodeIndex<A,M>, variables:&[bool]) -> bool {
         let mut up_to_variable = VariableIndex(0);
         let mut index = index;
         while !index.is_sink() {
@@ -188,13 +188,13 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
     /// Make a node representing the negation of the function represented by the input node interpreted as a BDD. A.k.a. ~ or !.
     ///
     /// Multiplicity of all terms in result is 1.
-    fn not_bdd(&mut self,index:NodeIndexWithMultiplicity<A,M>,cache : &mut HashMap<A,A>) -> NodeIndexWithMultiplicity<A,M> {
-        if index.is_true() { NodeIndexWithMultiplicity::FALSE }
-        else if index.is_false() { NodeIndexWithMultiplicity::TRUE }
-        else if let Some(&res) = cache.get(&index.address) { NodeIndexWithMultiplicity{address:res,multiplicity:M::ONE} }
+    fn not_bdd(&mut self, index: NodeIndex<A,M>, cache : &mut HashMap<A,A>) -> NodeIndex<A,M> {
+        if index.is_true() { NodeIndex::FALSE }
+        else if index.is_false() { NodeIndex::TRUE }
+        else if let Some(&res) = cache.get(&index.address) { NodeIndex {address:res,multiplicity:M::ONE} }
         else {
             let node = self.node(index.address);
-            let newnode = NodeWithMultiplicity {
+            let newnode = Node {
                 variable: node.variable,
                 lo: self.not_bdd(node.lo,cache),
                 hi: self.not_bdd(node.hi,cache),
@@ -210,22 +210,22 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
     /// TODO extend caching.
     ///
     /// Multiplicity of all terms in result is 1.
-    fn not_zdd(&mut self,index:NodeIndexWithMultiplicity<A,M>,upto:VariableIndex,total_number_variables:u16,cache : &mut HashMap<(A,VariableIndex),A>) -> NodeIndexWithMultiplicity<A,M> {
+    fn not_zdd(&mut self, index: NodeIndex<A,M>, upto:VariableIndex, total_number_variables:u16, cache : &mut HashMap<(A, VariableIndex),A>) -> NodeIndex<A,M> {
         //println!("not_zdd({},{},{})",index,upto,total_number_variables);
         // else if index.is_true() { self.create_zdd_any_variables_below_given_variable_true(upto,total_number_variables) }
         let key = (index.address,upto);
-        if let Some(&res) = cache.get(&key) { NodeIndexWithMultiplicity{address:res,multiplicity:M::ONE} }
+        if let Some(&res) = cache.get(&key) { NodeIndex {address:res,multiplicity:M::ONE} }
         else {
             let res={
                 let mut upper_bound = total_number_variables;
                 let mut index = {
-                    if index.is_false() { NodeIndexWithMultiplicity::TRUE }
-                    else if index.is_true() { NodeIndexWithMultiplicity::FALSE }
+                    if index.is_false() { NodeIndex::TRUE }
+                    else if index.is_true() { NodeIndex::FALSE }
                     else {
                         let node = self.node(index.address);
                         upper_bound = node.variable.0;
                         let new_upto = VariableIndex(node.variable.0+1);
-                        let newnode = NodeWithMultiplicity {
+                        let newnode = Node {
                             variable: node.variable,
                             lo: self.not_zdd(node.lo,new_upto,total_number_variables,cache),
                             hi: self.not_zdd(node.hi,new_upto,total_number_variables,cache),
@@ -236,7 +236,7 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
                 };
                 for i in (upto.0..upper_bound).rev() {
                     let hi = self.true_regardless_of_variables_below_zdd(VariableIndex(i+1),total_number_variables);
-                    index = self.add_node_if_not_present(NodeWithMultiplicity {
+                    index = self.add_node_if_not_present(Node {
                         variable : VariableIndex(i),
                         lo: index,
                         hi,
@@ -251,9 +251,9 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
 
     /// Create a node for a zdd (or find existing) for variable variable with lo and hi choices, and store it in the provided cache.
     /// Uniqueifies - sees if the hi and lo are same, in which case just produce lo, and looks for existing nodes.
-    fn create_node_bdd<K:Eq+Hash>(&mut self,lo:NodeIndexWithMultiplicity<A,M>,hi:NodeIndexWithMultiplicity<A,M>,variable:VariableIndex,key:K,cache:&mut HashMap<K,NodeIndexWithMultiplicity<A,M>>) -> NodeIndexWithMultiplicity<A,M> {
+    fn create_node_bdd<K:Eq+Hash>(&mut self, lo: NodeIndex<A,M>, hi: NodeIndex<A,M>, variable:VariableIndex, key:K, cache:&mut HashMap<K, NodeIndex<A,M>>) -> NodeIndex<A,M> {
         let res = if lo==hi { lo } else {
-            self.add_node_if_not_present(NodeWithMultiplicity{variable,lo,hi})
+            self.add_node_if_not_present(Node {variable,lo,hi})
         };
         cache.insert(key,res);
         res
@@ -262,8 +262,8 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
     /// Make a node representing index1 and index2 (and in the logical sense, a.k.a. ∧ or &&)
     ///
     /// If multiplicities are involved, this is a Product operation. That is, the multiplicity of a value in the result is the product of the multiplicities of the value in the inputs.
-    fn mul_bdd(&mut self,index1:NodeIndexWithMultiplicity<A,M>,index2:NodeIndexWithMultiplicity<A,M>,cache : &mut HashMap<(NodeIndexWithMultiplicity<A,M>,NodeIndexWithMultiplicity<A,M>),NodeIndexWithMultiplicity<A,M>>) -> NodeIndexWithMultiplicity<A,M> {
-        if index1.is_false() || index2.is_false() { NodeIndexWithMultiplicity::FALSE }
+    fn mul_bdd(&mut self, index1: NodeIndex<A,M>, index2: NodeIndex<A,M>, cache : &mut HashMap<(NodeIndex<A,M>, NodeIndex<A,M>), NodeIndex<A,M>>) -> NodeIndex<A,M> {
+        if index1.is_false() || index2.is_false() { NodeIndex::FALSE }
         else if index1.is_true() { index2.multiply(index1.multiplicity) }
         else if index2.is_true() { index1.multiply(index2.multiplicity) }
         else if M::MULTIPLICITIES_IRRELEVANT && index1.address==index2.address { index1.multiply(index2.multiplicity) } // a&a is not a in presence of multiplicities. Or even a multiple of a.
@@ -282,9 +282,9 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
         }
     }
 
-    fn node_incorporating_multiplicity(&self,index:NodeIndexWithMultiplicity<A,M>) -> NodeWithMultiplicity<A,M> {
+    fn node_incorporating_multiplicity(&self, index: NodeIndex<A,M>) -> Node<A,M> {
         let node = self.node(index.address);
-        NodeWithMultiplicity{
+        Node {
             variable: node.variable,
             lo: node.lo.multiply(index.multiplicity),
             hi: node.hi.multiply(index.multiplicity)
@@ -295,11 +295,11 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
     /// For non-trivial multiplicities, this is the *Sum* operator, not the *Union* operator.
     ///
     /// In particular, the sum_bdd(f,g)(x) has multiplicity equal to the sum of the multiplicity of f(x) and g(x).
-    fn sum_bdd(&mut self,index1:NodeIndexWithMultiplicity<A,M>,index2:NodeIndexWithMultiplicity<A,M>,cache : &mut HashMap<(NodeIndexWithMultiplicity<A,M>,NodeIndexWithMultiplicity<A,M>),NodeIndexWithMultiplicity<A,M>>) -> NodeIndexWithMultiplicity<A,M> {
-        if index1.address==index2.address { NodeIndexWithMultiplicity{address:index1.address,multiplicity:M::combine_or(index1.multiplicity,index2.multiplicity)} }
+    fn sum_bdd(&mut self, index1: NodeIndex<A,M>, index2: NodeIndex<A,M>, cache : &mut HashMap<(NodeIndex<A,M>, NodeIndex<A,M>), NodeIndex<A,M>>) -> NodeIndex<A,M> {
+        if index1.address==index2.address { NodeIndex {address:index1.address,multiplicity:M::combine_or(index1.multiplicity, index2.multiplicity)} }
         else if index1.is_false() { index2 }
         else if index2.is_false() { index1 }
-        else if M::MULTIPLICITIES_IRRELEVANT && (index1.is_true() || index2.is_true()) { NodeIndexWithMultiplicity::TRUE }
+        else if M::MULTIPLICITIES_IRRELEVANT && (index1.is_true() || index2.is_true()) { NodeIndex::TRUE }
             // if one of the two is true, then need to add true to both sides of the other to get multiplicities correct. The above line is just an optimization for that case.
         else {
             let (index1,index2) = if (M::SYMMETRIC_OR && index1.address < index2.address) || index1.address.is_true() {(index2,index1)} else {(index1,index2)};
@@ -307,10 +307,11 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
             if let Some(&res) = cache.get(&key) { res }
             else {
                 let node1 = self.node_incorporating_multiplicity(index1);
-                let node2 = if index2.is_true() {NodeWithMultiplicity{
+                let node2 = if index2.is_true() {
+                    Node {
                     variable: node1.variable,
-                    lo: NodeIndexWithMultiplicity { address: A::TRUE, multiplicity: index2.multiplicity },
-                    hi: NodeIndexWithMultiplicity { address: A::TRUE, multiplicity: index2.multiplicity }
+                    lo: NodeIndex { address: A::TRUE, multiplicity: index2.multiplicity },
+                    hi: NodeIndex { address: A::TRUE, multiplicity: index2.multiplicity }
                 }} else {self.node_incorporating_multiplicity(index2)};
                 let (lo1,hi1) = if node1.variable <= node2.variable { (node1.lo,node1.hi)} else {(index1,index1)};
                 let (lo2,hi2) = if node2.variable <= node1.variable { (node2.lo,node2.hi)} else {(index2,index2)};
@@ -323,7 +324,7 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
 
 
     /// compute index as a ZDD anded with NodeIndex::TRUE, which means take all lo branches on index1.
-    fn and_zdd_true(&mut self,index:NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M> {
+    fn and_zdd_true(&mut self, index: NodeIndex<A,M>) -> NodeIndex<A,M> {
         let mut index = index;
         while !index.is_sink() {
             index = self.node(index.address).lo.multiply(index.multiplicity);
@@ -333,9 +334,9 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
 
     /// Create a node for a zdd (or find existing) for variable variable with lo and hi choices, and store it in the provided cache.
     /// Uniqueifies - sees if the hi is false, in which case just produce lo, and looks for existing nodes.
-    fn create_node_zdd<K:Eq+Hash>(&mut self,lo:NodeIndexWithMultiplicity<A,M>,hi:NodeIndexWithMultiplicity<A,M>,variable:VariableIndex,key:K,cache:&mut HashMap<K,NodeIndexWithMultiplicity<A,M>>) -> NodeIndexWithMultiplicity<A,M> {
+    fn create_node_zdd<K:Eq+Hash>(&mut self, lo: NodeIndex<A,M>, hi: NodeIndex<A,M>, variable:VariableIndex, key:K, cache:&mut HashMap<K, NodeIndex<A,M>>) -> NodeIndex<A,M> {
         let res = if hi.is_false() { lo } else {
-            self.add_node_if_not_present(NodeWithMultiplicity{variable,lo,hi})
+            self.add_node_if_not_present(Node {variable,lo,hi})
         };
         cache.insert(key,res);
         res
@@ -343,8 +344,8 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
     /// Make a node representing index1 and index2 (and in the logical sense, a.k.a. ∧ or &&)
     ///
     /// If multiplicities are involved, this is a Product operation. That is, the multiplicity of a value in the result is the product of the multiplicities of the value in the inputs.
-    fn mul_zdd(&mut self,index1:NodeIndexWithMultiplicity<A,M>,index2:NodeIndexWithMultiplicity<A,M>,cache : &mut HashMap<(NodeIndexWithMultiplicity<A,M>,NodeIndexWithMultiplicity<A,M>),NodeIndexWithMultiplicity<A,M>>) -> NodeIndexWithMultiplicity<A,M> {
-        if index1.is_false() || index2.is_false() { NodeIndexWithMultiplicity::FALSE }
+    fn mul_zdd(&mut self, index1: NodeIndex<A,M>, index2: NodeIndex<A,M>, cache : &mut HashMap<(NodeIndex<A,M>, NodeIndex<A,M>), NodeIndex<A,M>>) -> NodeIndex<A,M> {
+        if index1.is_false() || index2.is_false() { NodeIndex::FALSE }
         else if index1.is_true() { self.and_zdd_true(index2).multiply(index1.multiplicity) }
         else if index2.is_true() { self.and_zdd_true(index1).multiply(index2.multiplicity) }
         else if M::MULTIPLICITIES_IRRELEVANT && index1==index2 { index1.multiply(index2.multiplicity) } // a&a is not a in presence of multiplicities. Or even a multiple of a.
@@ -354,8 +355,8 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
             else {
                 let node1 = self.node_incorporating_multiplicity(index1);
                 let node2 = self.node_incorporating_multiplicity(index2);
-                let (lo1,hi1) = if node1.variable <= node2.variable { (node1.lo,node1.hi)} else {(index1,NodeIndexWithMultiplicity::FALSE)};
-                let (lo2,hi2) = if node2.variable <= node1.variable { (node2.lo,node2.hi)} else {(index2,NodeIndexWithMultiplicity::FALSE)};
+                let (lo1,hi1) = if node1.variable <= node2.variable { (node1.lo,node1.hi)} else {(index1, NodeIndex::FALSE)};
+                let (lo2,hi2) = if node2.variable <= node1.variable { (node2.lo,node2.hi)} else {(index2, NodeIndex::FALSE)};
                 let lo = self.mul_zdd(lo1,lo2,cache);
                 let hi = self.mul_zdd(hi1,hi2,cache);
                 self.create_node_zdd(lo,hi,if node1.variable <= node2.variable { node1.variable } else {node2.variable},key,cache)
@@ -369,8 +370,8 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
     ///
     /// In particular, the sum_bdd(f,g)(x) has multiplicity equal to the sum of the multiplicity of f(x) and g(x).
     /// Make a node representing index1 and index2 (and in the logical sense, a.k.a. ∧ or &&)
-    fn sum_zdd(&mut self,index1:NodeIndexWithMultiplicity<A,M>,index2:NodeIndexWithMultiplicity<A,M>,cache : &mut HashMap<(NodeIndexWithMultiplicity<A,M>,NodeIndexWithMultiplicity<A,M>),NodeIndexWithMultiplicity<A,M>>) -> NodeIndexWithMultiplicity<A,M> {
-        if index1.address==index2.address { NodeIndexWithMultiplicity{address:index1.address,multiplicity:M::combine_or(index1.multiplicity,index2.multiplicity)} }
+    fn sum_zdd(&mut self, index1: NodeIndex<A,M>, index2: NodeIndex<A,M>, cache : &mut HashMap<(NodeIndex<A,M>, NodeIndex<A,M>), NodeIndex<A,M>>) -> NodeIndex<A,M> {
+        if index1.address==index2.address { NodeIndex {address:index1.address,multiplicity:M::combine_or(index1.multiplicity, index2.multiplicity)} }
         else if index1.is_false() { index2 }
         else if index2.is_false() { index1 }
         // if one of the two is true, then need to add true to both sides of the other to get multiplicities correct. The above line is just an optimization for that case.
@@ -380,13 +381,14 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
             if let Some(&res) = cache.get(&key) { res }
             else {
                 let node1 = self.node_incorporating_multiplicity(index1);
-                let node2 = if index2.is_true() {NodeWithMultiplicity{
+                let node2 = if index2.is_true() {
+                    Node {
                     variable: node1.variable,
-                    lo: NodeIndexWithMultiplicity { address: A::TRUE, multiplicity: index2.multiplicity },
-                    hi: NodeIndexWithMultiplicity::FALSE
+                    lo: NodeIndex { address: A::TRUE, multiplicity: index2.multiplicity },
+                    hi: NodeIndex::FALSE
                 }} else {self.node_incorporating_multiplicity(index2)};
-                let (lo1,hi1) = if node1.variable <= node2.variable { (node1.lo,node1.hi)} else {(index1,NodeIndexWithMultiplicity::FALSE)};
-                let (lo2,hi2) = if node2.variable <= node1.variable { (node2.lo,node2.hi)} else {(index2,NodeIndexWithMultiplicity::FALSE)};
+                let (lo1,hi1) = if node1.variable <= node2.variable { (node1.lo,node1.hi)} else {(index1, NodeIndex::FALSE)};
+                let (lo2,hi2) = if node2.variable <= node1.variable { (node2.lo,node2.hi)} else {(index2, NodeIndex::FALSE)};
                 let lo = self.sum_zdd(lo1,lo2,cache);
                 let hi = self.sum_zdd(hi1,hi2,cache);
                 self.create_node_zdd(lo,hi,if node1.variable <= node2.variable { node1.variable } else {node2.variable},key,cache)
@@ -426,7 +428,7 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
         res
     }
 
-    fn number_solutions<G:GeneratingFunctionWithMultiplicity<M>,const BDD:bool>(&self,index:NodeIndexWithMultiplicity<A,M>,num_variables:u16) -> G {
+    fn number_solutions<G:GeneratingFunctionWithMultiplicity<M>,const BDD:bool>(&self, index: NodeIndex<A,M>, num_variables:u16) -> G {
         let work = self.all_number_solutions::<G,BDD>(index.address.as_usize()+1,num_variables);
         let found = work[index.address.as_usize()].clone();
         let before_multiplicity = if BDD {
@@ -436,14 +438,14 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
         before_multiplicity.multiply(index.multiplicity)
     }
 
-    fn number_solutions_bdd<G:GeneratingFunctionWithMultiplicity<M>>(&self,index:NodeIndexWithMultiplicity<A,M>,num_variables:u16) -> G { self.number_solutions::<G,true>(index,num_variables) }
-    fn number_solutions_zdd<G:GeneratingFunctionWithMultiplicity<M>>(&self,index:NodeIndexWithMultiplicity<A,M>,num_variables:u16) -> G { self.number_solutions::<G,false>(index,num_variables) }
+    fn number_solutions_bdd<G:GeneratingFunctionWithMultiplicity<M>>(&self, index: NodeIndex<A,M>, num_variables:u16) -> G { self.number_solutions::<G,true>(index, num_variables) }
+    fn number_solutions_zdd<G:GeneratingFunctionWithMultiplicity<M>>(&self, index: NodeIndex<A,M>, num_variables:u16) -> G { self.number_solutions::<G,false>(index, num_variables) }
 
     /// Do garbage collection. Provide the items one wants to keep, and get rid of anything not in the transitive dependencies of keep.
     /// Returns a renamer from old nodes to new nodes.
-    fn gc(&mut self,keep:impl IntoIterator<Item=NodeIndexWithMultiplicity<A,M>>) -> NodeRenamingWithMuliplicity<A>;
+    fn gc(&mut self, keep:impl IntoIterator<Item=NodeIndex<A,M>>) -> NodeRenaming<A>;
 
-    fn make_dot_file<W:Write,F:Fn(VariableIndex)->String>(&self,writer:&mut W,name:impl Display,start_nodes:&[(NodeIndexWithMultiplicity<A,M>,Option<String>)],namer:F) -> std::io::Result<()> {
+    fn make_dot_file<W:Write,F:Fn(VariableIndex)->String>(&self, writer:&mut W, name:impl Display, start_nodes:&[(NodeIndex<A,M>, Option<String>)], namer:F) -> std::io::Result<()> {
         //let namer = |i:VariableIndex| i.to_string();
         fn munge_label(s:&str) -> String { // see if html label.
             if s.starts_with('<') && s.ends_with('>') {s.to_string()} else { format!("\"{}\"",s) }
@@ -486,7 +488,7 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
 /// Note that the two special indices are not explicitly stored.
 #[derive(Clone,Eq, PartialEq)]
 pub struct NodeList<A:NodeAddress,M:Multiplicity> {
-    pub(crate) nodes : Vec<NodeWithMultiplicity<A,M>>,
+    pub(crate) nodes : Vec<Node<A,M>>,
 }
 
 impl <A:NodeAddress,M:Multiplicity> Default for NodeList<A,M> {
@@ -496,11 +498,11 @@ impl <A:NodeAddress,M:Multiplicity> Default for NodeList<A,M> {
 }
 
 impl <A:NodeAddress,M:Multiplicity> XDDBase<A,M> for NodeList<A,M> {
-    fn node(&self, index: A) -> NodeWithMultiplicity<A,M> { self.nodes[index.as_usize()-2] }
-    fn find_node_index(&self, node: NodeWithMultiplicity<A,M>) -> Option<A> {
+    fn node(&self, index: A) -> Node<A,M> { self.nodes[index.as_usize()-2] }
+    fn find_node_index(&self, node: Node<A,M>) -> Option<A> {
         self.nodes.iter().position(|n|*n==node).map(|i|(i+2).try_into().map_err(|_|()).expect("Too many nodes for given address length"))
     }
-    fn add_node(&mut self, node: NodeWithMultiplicity<A,M>) -> A {
+    fn add_node(&mut self, node: Node<A,M>) -> A {
         self.nodes.push(node);
         (1+self.nodes.len()).try_into().map_err(|_|()).unwrap()
     }
@@ -509,10 +511,10 @@ impl <A:NodeAddress,M:Multiplicity> XDDBase<A,M> for NodeList<A,M> {
 
     /// Do garbage collection. Provide the items one wants to keep, and get rid of anything not in the transitive dependencies of keep.
     /// Returns a renamer such that v[old_node.0] is what v maps in to. If nothing, then map into NodeIndex::JUNK.
-    fn gc(&mut self,keep:impl IntoIterator<Item=NodeIndexWithMultiplicity<A,M>>) -> NodeRenamingWithMuliplicity<A> {
+    fn gc(&mut self, keep:impl IntoIterator<Item=NodeIndex<A,M>>) -> NodeRenaming<A> {
         // First pass. Use map to say what to keep, use A::FALSE as a placeholder meaning the address is not used, and A::TRUE as a placeholder meaning the address is used.
         let mut map : Vec<A> = vec![A::FALSE;self.len()+2];
-        fn do_keep<A:NodeAddress,M:Multiplicity>(nodes:&Vec<NodeWithMultiplicity<A,M>>,map:&mut Vec<A>,n:NodeIndexWithMultiplicity<A,M>) {
+        fn do_keep<A:NodeAddress,M:Multiplicity>(nodes:&Vec<Node<A,M>>, map:&mut Vec<A>, n: NodeIndex<A,M>) {
             let address = n.address.as_usize();
             if map[address]!=A::TRUE {
                 map[address]=A::TRUE;
@@ -535,17 +537,17 @@ impl <A:NodeAddress,M:Multiplicity> XDDBase<A,M> for NodeList<A,M> {
             if into==A::TRUE { // should keep this address
                 map[i]=(len+2).try_into().map_err(|_|()).unwrap();
                 let old_node = self.nodes[i-2];
-                self.nodes[len]=NodeWithMultiplicity {
+                self.nodes[len]= Node {
                     variable: old_node.variable,
-                    lo: NodeIndexWithMultiplicity{ address: map[old_node.lo.address.as_usize()], multiplicity:old_node.lo.multiplicity},
-                    hi: NodeIndexWithMultiplicity{ address: map[old_node.hi.address.as_usize()], multiplicity:old_node.hi.multiplicity},
+                    lo: NodeIndex { address: map[old_node.lo.address.as_usize()], multiplicity:old_node.lo.multiplicity},
+                    hi: NodeIndex { address: map[old_node.hi.address.as_usize()], multiplicity:old_node.hi.multiplicity},
                 };
                 len=len+1;
             }
         }
         self.nodes.truncate(len);
         // now convert map into the final result.
-        NodeRenamingWithMuliplicity(map)
+        NodeRenaming(map)
     }
 
 }
@@ -555,7 +557,7 @@ impl <A:NodeAddress,M:Multiplicity> XDDBase<A,M> for NodeList<A,M> {
 #[derive(Clone,Eq, PartialEq)]
 pub struct NodeListWithFastLookup<A:NodeAddress,M:Multiplicity> {
     pub(crate) nodes : NodeList<A,M>,
-    pub(crate) node_to_index : HashMap<NodeWithMultiplicity<A,M>,A>,
+    pub(crate) node_to_index : HashMap<Node<A,M>,A>,
 }
 
 impl <A:NodeAddress,M:Multiplicity> Default for NodeListWithFastLookup<A,M> {
@@ -565,19 +567,19 @@ impl <A:NodeAddress,M:Multiplicity> Default for NodeListWithFastLookup<A,M> {
 }
 
 impl <A:NodeAddress,M:Multiplicity> XDDBase<A,M> for NodeListWithFastLookup<A,M> {
-    fn node(&self, index: A) -> NodeWithMultiplicity<A,M> { self.nodes.node(index) }
-    fn find_node_index(&self, node: NodeWithMultiplicity<A,M>) -> Option<A> {
+    fn node(&self, index: A) -> Node<A,M> { self.nodes.node(index) }
+    fn find_node_index(&self, node: Node<A,M>) -> Option<A> {
         self.node_to_index.get(&node).cloned()
     }
 
-    fn add_node(&mut self, node: NodeWithMultiplicity<A,M>) -> A {
+    fn add_node(&mut self, node: Node<A,M>) -> A {
         let res = self.nodes.add_node(node);
         self.node_to_index.insert(node, res);
         res
     }
     fn len(&self) -> usize { self.nodes.len() }
 
-    fn gc(&mut self, keep: impl IntoIterator<Item=NodeIndexWithMultiplicity<A,M>>) -> NodeRenamingWithMuliplicity<A> {
+    fn gc(&mut self, keep: impl IntoIterator<Item=NodeIndex<A,M>>) -> NodeRenaming<A> {
         let map = self.nodes.gc(keep);
         self.node_to_index.clear();
         for (i,node) in self.nodes.nodes.iter().enumerate() {

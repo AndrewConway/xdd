@@ -43,19 +43,19 @@ impl Display for VariableIndex {
 /// A is the type of addresses, typically u32 or usize.
 /// M is the type of multiplicies, typically some unsigned integer
 #[derive(Copy, Clone,Eq, PartialEq,Hash,Debug)]
-pub struct NodeIndexWithMultiplicity<A:NodeAddress,M:Multiplicity> {
+pub struct NodeIndex<A:NodeAddress,M:Multiplicity> {
     address : A,
     multiplicity : M,
 }
 
 
-impl <A:NodeAddress,M:Multiplicity> NodeIndexWithMultiplicity<A,M> {
+impl <A:NodeAddress,M:Multiplicity> NodeIndex<A,M> {
     /// Special sink index that indicates the result is false. Sometimes called 0 or Bottom or ⊥.
     /// Do not use this node index for anything else.
-    pub const FALSE : Self = NodeIndexWithMultiplicity{address:A::FALSE,multiplicity:M::ONE};
+    pub const FALSE : Self = NodeIndex {address:A::FALSE,multiplicity:M::ONE};
     /// Special sink index that indicates the result is true. Sometimes called 1 or Top or ⊤.
     /// Do not use this node index for anything else.
-    pub const TRUE : Self = NodeIndexWithMultiplicity{address:A::TRUE,multiplicity:M::ONE};
+    pub const TRUE : Self = NodeIndex {address:A::TRUE,multiplicity:M::ONE};
 
     /// See if the node index is one of the two special sink nodes.
     pub fn is_sink(self) -> bool { self.is_false()||self.is_true() } // could be made more efficient by <2, but requires further restrictions on A.
@@ -64,7 +64,7 @@ impl <A:NodeAddress,M:Multiplicity> NodeIndexWithMultiplicity<A,M> {
     /// See if the node index is the special TRUE sink node.
     pub fn is_true(self) -> bool { self.address==A::TRUE }
 
-    pub fn multiply(self,m:M) -> Self { NodeIndexWithMultiplicity{address:self.address,multiplicity:M::multiply(self.multiplicity,m)}}
+    pub fn multiply(self,m:M) -> Self { NodeIndex {address:self.address,multiplicity:M::multiply(self.multiplicity, m)}}
 }
 
 
@@ -155,7 +155,7 @@ impl Multiplicity for u32 {
 }
 
 
-impl <A:NodeAddress,M:Multiplicity> Display for NodeIndexWithMultiplicity<A,M> {
+impl <A:NodeAddress,M:Multiplicity> Display for NodeIndex<A,M> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f,"{}*{}",self.multiplicity,self.address)
     }
@@ -174,37 +174,37 @@ impl <A:NodeAddress,M:Multiplicity> Display for NodeIndexWithMultiplicity<A,M> {
 /// # Meaning
 /// If the variable is true, go to the hi node, else go to the low node.
 #[derive(Copy, Clone,Eq, PartialEq,Hash)]
-pub struct NodeWithMultiplicity<A:NodeAddress,M:Multiplicity> {
+pub struct Node<A:NodeAddress,M:Multiplicity> {
     pub variable : VariableIndex,
-    pub lo : NodeIndexWithMultiplicity<A,M>,
-    pub hi : NodeIndexWithMultiplicity<A,M>,
+    pub lo : NodeIndex<A,M>,
+    pub hi : NodeIndex<A,M>,
 }
 
 /// A object that can function as a decision diagram factory, doing stuff quickly.
-pub trait DecisionDiagramFactoryWithMultiplicity<A:NodeAddress,M:Multiplicity> {
+pub trait DecisionDiagramFactory<A:NodeAddress,M:Multiplicity> {
     /// Make a new decision diagram with the stated number of variables.
     fn new(num_variables:u16) -> Self;
     /// Compute a diagram being the logical and of index1 and index2.
-    fn and(&mut self,index1:NodeIndexWithMultiplicity<A,M>,index2:NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M>;
+    fn and(&mut self, index1: NodeIndex<A,M>, index2: NodeIndex<A,M>) -> NodeIndex<A,M>;
     /// Compute a diagram being the logical or of index1 and index2.
-    fn or(&mut self,index1:NodeIndexWithMultiplicity<A,M>,index2:NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M>;
+    fn or(&mut self, index1: NodeIndex<A,M>, index2: NodeIndex<A,M>) -> NodeIndex<A,M>;
     /// Compute a diagram being the logical not of index1 and index2.
-    fn not(&mut self,index:NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M>;
+    fn not(&mut self, index: NodeIndex<A,M>) -> NodeIndex<A,M>;
     /// Enumerate the solutions to the given generating function.
-    fn number_solutions<G:GeneratingFunctionWithMultiplicity<M>>(&self,index:NodeIndexWithMultiplicity<A,M>) -> G;
+    fn number_solutions<G:GeneratingFunctionWithMultiplicity<M>>(&self, index: NodeIndex<A,M>) -> G;
     /// Produce a DD that describes a single variable. That is, a DD that has all variables having no effect other than just that variable leading to TRUE iff variable is true.
-    fn single_variable(&mut self,variable:VariableIndex) -> NodeIndexWithMultiplicity<A,M>;
+    fn single_variable(&mut self,variable:VariableIndex) -> NodeIndex<A,M>;
     /// Get the number of nodes in the DD.
     fn len(&self) -> usize;
     /// Do garbage collection. Provide the items one wants to keep, and get rid of anything not in the transitive dependencies of keep.
     /// Returns a vector v such that v[old_node.0] is what v maps in to. If nothing, then map into NodeIndex::JUNK.
-    fn gc(&mut self,keep:impl IntoIterator<Item=NodeIndexWithMultiplicity<A,M>>) -> NodeRenamingWithMuliplicity<A>;
+    fn gc(&mut self, keep:impl IntoIterator<Item=NodeIndex<A,M>>) -> NodeRenaming<A>;
     /// Produce a DD which is true iff exactly 1 of the given variables is true, regardless of other variables.
     /// The variables array must be sorted, smallest to highest.
-    fn exactly_one_of(&mut self,variables:&[VariableIndex]) -> NodeIndexWithMultiplicity<A,M>;
+    fn exactly_one_of(&mut self,variables:&[VariableIndex]) -> NodeIndex<A,M>;
     /// Do an "and" of lots of functions.
-    fn poly_and(&mut self,indices:&[NodeIndexWithMultiplicity<A,M>]) -> Option<NodeIndexWithMultiplicity<A,M>> {
-        let mut res : Option<NodeIndexWithMultiplicity<A,M>> = None;
+    fn poly_and(&mut self, indices:&[NodeIndex<A,M>]) -> Option<NodeIndex<A,M>> {
+        let mut res : Option<NodeIndex<A,M>> = None;
         for n in indices {
             if let Some(ni) = res {
                 res=Some(self.and(*n,ni));
@@ -215,24 +215,24 @@ pub trait DecisionDiagramFactoryWithMultiplicity<A:NodeAddress,M:Multiplicity> {
         res
     }
     /// write a graph file to the given writer with a given name showing the DD starting from start_nodes.
-    fn make_dot_file<W:Write,F:Fn(VariableIndex)->String>(&self,writer:&mut W,name:impl Display,start_nodes:&[(NodeIndexWithMultiplicity<A,M>,Option<String>)],namer:F) -> std::io::Result<()>;
+    fn make_dot_file<W:Write,F:Fn(VariableIndex)->String>(&self, writer:&mut W, name:impl Display, start_nodes:&[(NodeIndex<A,M>, Option<String>)], namer:F) -> std::io::Result<()>;
 }
 
 
 
 /// A factory that can do efficient operations on BDDs.
-pub struct BDDFactoryWithMultiplicity<A:NodeAddress,M:Multiplicity> {
+pub struct BDDFactory<A:NodeAddress,M:Multiplicity> {
     nodes : xdd_with_multiplicity::NodeListWithFastLookup<A,M>,
-    and_cache : HashMap<(NodeIndexWithMultiplicity<A,M>,NodeIndexWithMultiplicity<A,M>),NodeIndexWithMultiplicity<A,M>>,
-    or_cache : HashMap<(NodeIndexWithMultiplicity<A,M>,NodeIndexWithMultiplicity<A,M>),NodeIndexWithMultiplicity<A,M>>,
+    and_cache : HashMap<(NodeIndex<A,M>, NodeIndex<A,M>), NodeIndex<A,M>>,
+    or_cache : HashMap<(NodeIndex<A,M>, NodeIndex<A,M>), NodeIndex<A,M>>,
     not_cache : HashMap<A,A>,
     num_variables : u16,
 }
 
-impl <A:NodeAddress+Default,M:Multiplicity> DecisionDiagramFactoryWithMultiplicity<A,M> for BDDFactoryWithMultiplicity<A,M> {
+impl <A:NodeAddress+Default,M:Multiplicity> DecisionDiagramFactory<A,M> for BDDFactory<A,M> {
 
     fn new(num_variables:u16) -> Self {
-        BDDFactoryWithMultiplicity{
+        BDDFactory {
             nodes: Default::default(),
             and_cache: Default::default(),
             or_cache: Default::default(),
@@ -240,27 +240,27 @@ impl <A:NodeAddress+Default,M:Multiplicity> DecisionDiagramFactoryWithMultiplici
             num_variables
         }
     }
-    fn and(&mut self, index1: NodeIndexWithMultiplicity<A,M>, index2: NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M> {
+    fn and(&mut self, index1: NodeIndex<A,M>, index2: NodeIndex<A,M>) -> NodeIndex<A,M> {
         use xdd_with_multiplicity::XDDBase;
         self.nodes.mul_bdd(index1,index2,&mut self.and_cache)
     }
 
-    fn or(&mut self, index1: NodeIndexWithMultiplicity<A,M>, index2: NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M> {
+    fn or(&mut self, index1: NodeIndex<A,M>, index2: NodeIndex<A,M>) -> NodeIndex<A,M> {
         use xdd_with_multiplicity::XDDBase;
         self.nodes.sum_bdd(index1,index2,&mut self.or_cache)
     }
 
-    fn not(&mut self, index:NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M> {
+    fn not(&mut self, index: NodeIndex<A,M>) -> NodeIndex<A,M> {
         use xdd_with_multiplicity::XDDBase;
         self.nodes.not_bdd(index,&mut self.not_cache)
     }
 
-    fn number_solutions<G: GeneratingFunctionWithMultiplicity<M>>(&self, index: NodeIndexWithMultiplicity<A,M>) -> G {
+    fn number_solutions<G: GeneratingFunctionWithMultiplicity<M>>(&self, index: NodeIndex<A,M>) -> G {
         use xdd_with_multiplicity::XDDBase;
         self.nodes.number_solutions::<G,true>(index,self.num_variables)
     }
 
-    fn single_variable(&mut self, variable: VariableIndex) -> NodeIndexWithMultiplicity<A,M> {
+    fn single_variable(&mut self, variable: VariableIndex) -> NodeIndex<A,M> {
         use xdd_with_multiplicity::XDDBase;
         self.nodes.single_variable(variable)
     }
@@ -270,7 +270,7 @@ impl <A:NodeAddress+Default,M:Multiplicity> DecisionDiagramFactoryWithMultiplici
         self.nodes.len()
     }
 
-    fn gc(&mut self,keep:impl IntoIterator<Item=NodeIndexWithMultiplicity<A,M>>) -> NodeRenamingWithMuliplicity<A> {
+    fn gc(&mut self, keep:impl IntoIterator<Item=NodeIndex<A,M>>) -> NodeRenaming<A> {
         self.and_cache.clear();
         self.or_cache.clear();
         self.not_cache.clear();
@@ -278,30 +278,30 @@ impl <A:NodeAddress+Default,M:Multiplicity> DecisionDiagramFactoryWithMultiplici
         self.nodes.gc(keep)
     }
 
-    fn exactly_one_of(&mut self, variables: &[VariableIndex]) -> NodeIndexWithMultiplicity<A,M> {
+    fn exactly_one_of(&mut self, variables: &[VariableIndex]) -> NodeIndex<A,M> {
         use xdd_with_multiplicity::XDDBase;
         self.nodes.exactly_one_of_bdd(variables)
     }
 
-    fn make_dot_file<W:Write,F:Fn(VariableIndex)->String>(&self,writer:&mut W,name:impl Display,start_nodes:&[(NodeIndexWithMultiplicity<A,M>,Option<String>)],namer:F) -> std::io::Result<()> {
+    fn make_dot_file<W:Write,F:Fn(VariableIndex)->String>(&self, writer:&mut W, name:impl Display, start_nodes:&[(NodeIndex<A,M>, Option<String>)], namer:F) -> std::io::Result<()> {
         use xdd_with_multiplicity::XDDBase;
         self.nodes.make_dot_file(writer,name,start_nodes,namer)
     }
 }
 
 /// A factory that can do efficient operations on BDDs.
-pub struct ZDDFactoryWithMultiplicity<A:NodeAddress,M:Multiplicity> {
+pub struct ZDDFactory<A:NodeAddress,M:Multiplicity> {
     nodes : xdd_with_multiplicity::NodeListWithFastLookup<A,M>,
-    and_cache : HashMap<(NodeIndexWithMultiplicity<A,M>,NodeIndexWithMultiplicity<A,M>),NodeIndexWithMultiplicity<A,M>>,
-    or_cache : HashMap<(NodeIndexWithMultiplicity<A,M>,NodeIndexWithMultiplicity<A,M>),NodeIndexWithMultiplicity<A,M>>,
+    and_cache : HashMap<(NodeIndex<A,M>, NodeIndex<A,M>), NodeIndex<A,M>>,
+    or_cache : HashMap<(NodeIndex<A,M>, NodeIndex<A,M>), NodeIndex<A,M>>,
     not_cache : HashMap<(A,VariableIndex),A>,
     num_variables : u16,
 }
 
-impl <A:NodeAddress,M:Multiplicity> DecisionDiagramFactoryWithMultiplicity<A,M> for ZDDFactoryWithMultiplicity<A,M> {
+impl <A:NodeAddress,M:Multiplicity> DecisionDiagramFactory<A,M> for ZDDFactory<A,M> {
 
     fn new(num_variables:u16) -> Self {
-        ZDDFactoryWithMultiplicity{
+        ZDDFactory {
             nodes: Default::default(),
             and_cache: Default::default(),
             or_cache: Default::default(),
@@ -309,28 +309,28 @@ impl <A:NodeAddress,M:Multiplicity> DecisionDiagramFactoryWithMultiplicity<A,M> 
             num_variables
         }
     }
-    fn and(&mut self, index1: NodeIndexWithMultiplicity<A,M>, index2: NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M> {
+    fn and(&mut self, index1: NodeIndex<A,M>, index2: NodeIndex<A,M>) -> NodeIndex<A,M> {
         use xdd_with_multiplicity::XDDBase;
         self.nodes.mul_zdd(index1,index2,&mut self.and_cache)
     }
 
-    fn or(&mut self, index1: NodeIndexWithMultiplicity<A,M>, index2: NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M> {
+    fn or(&mut self, index1: NodeIndex<A,M>, index2: NodeIndex<A,M>) -> NodeIndex<A,M> {
         use xdd_with_multiplicity::XDDBase;
         self.nodes.sum_zdd(index1,index2,&mut self.or_cache)
     }
 
-    fn not(&mut self, index:NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M> {
+    fn not(&mut self, index: NodeIndex<A,M>) -> NodeIndex<A,M> {
         use xdd_with_multiplicity::XDDBase;
         self.nodes.not_zdd(index,VariableIndex(0),self.num_variables,&mut self.not_cache)
 
     }
 
-    fn number_solutions<G: GeneratingFunctionWithMultiplicity<M>>(&self, index: NodeIndexWithMultiplicity<A,M>) -> G {
+    fn number_solutions<G: GeneratingFunctionWithMultiplicity<M>>(&self, index: NodeIndex<A,M>) -> G {
         use xdd_with_multiplicity::XDDBase;
         self.nodes.number_solutions::<G,false>(index,self.num_variables)
     }
 
-    fn single_variable(&mut self, variable: VariableIndex) -> NodeIndexWithMultiplicity<A,M> {
+    fn single_variable(&mut self, variable: VariableIndex) -> NodeIndex<A,M> {
         use xdd_with_multiplicity::XDDBase;
         self.nodes.single_variable_zdd(variable,self.num_variables) // TODO
     }
@@ -340,7 +340,7 @@ impl <A:NodeAddress,M:Multiplicity> DecisionDiagramFactoryWithMultiplicity<A,M> 
         self.nodes.len()
     }
 
-    fn gc(&mut self,keep:impl IntoIterator<Item=NodeIndexWithMultiplicity<A,M>>) -> NodeRenamingWithMuliplicity<A> {
+    fn gc(&mut self, keep:impl IntoIterator<Item=NodeIndex<A,M>>) -> NodeRenaming<A> {
         self.and_cache.clear();
         self.or_cache.clear();
         self.not_cache.clear();
@@ -348,12 +348,12 @@ impl <A:NodeAddress,M:Multiplicity> DecisionDiagramFactoryWithMultiplicity<A,M> 
         self.nodes.gc(keep)
     }
 
-    fn exactly_one_of(&mut self, variables: &[VariableIndex]) -> NodeIndexWithMultiplicity<A,M> {
+    fn exactly_one_of(&mut self, variables: &[VariableIndex]) -> NodeIndex<A,M> {
         use xdd_with_multiplicity::XDDBase;
         self.nodes.exactly_one_of_zdd(variables,self.num_variables)
     }
 
-    fn make_dot_file<W:Write,F:Fn(VariableIndex)->String>(&self,writer:&mut W,name:impl Display,start_nodes:&[(NodeIndexWithMultiplicity<A,M>,Option<String>)],namer:F) -> std::io::Result<()> {
+    fn make_dot_file<W:Write,F:Fn(VariableIndex)->String>(&self, writer:&mut W, name:impl Display, start_nodes:&[(NodeIndex<A,M>, Option<String>)], namer:F) -> std::io::Result<()> {
         use xdd_with_multiplicity::XDDBase;
         self.nodes.make_dot_file(writer,name,start_nodes,namer)
     }
@@ -361,11 +361,11 @@ impl <A:NodeAddress,M:Multiplicity> DecisionDiagramFactoryWithMultiplicity<A,M> 
 
 
 
-pub struct NodeRenamingWithMuliplicity<A:NodeAddress>(Vec<A>);
+pub struct NodeRenaming<A:NodeAddress>(Vec<A>);
 
-impl <A:NodeAddress> NodeRenamingWithMuliplicity<A> {
-    pub fn rename<M:Multiplicity>(&self,index:NodeIndexWithMultiplicity<A,M>) -> Option<NodeIndexWithMultiplicity<A,M>> {
+impl <A:NodeAddress> NodeRenaming<A> {
+    pub fn rename<M:Multiplicity>(&self, index: NodeIndex<A,M>) -> Option<NodeIndex<A,M>> {
         let res = self.0[index.address.as_usize()];
-        if res==A::FALSE && index.address!=A::FALSE { None } else { Some(NodeIndexWithMultiplicity{address:res,multiplicity:index.multiplicity}) }
+        if res==A::FALSE && index.address!=A::FALSE { None } else { Some(NodeIndex {address:res,multiplicity:index.multiplicity}) }
     }
 }
