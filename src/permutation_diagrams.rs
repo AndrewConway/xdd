@@ -18,7 +18,8 @@ use std::fmt::{Display, Formatter};
 use std::io::Write;
 use std::marker::PhantomData;
 use std::ops::Index;
-use crate::{DecisionDiagramFactory, GeneratingFunction, Node, NodeIndex, NodeRenaming, VariableIndex, XDDBase, ZDDFactory};
+use crate::{DecisionDiagramFactory, GeneratingFunction, Node, NodeIndex, NodeRenaming, VariableIndex, ZDDFactory};
+use crate::xdd_representations::XDDBase;
 
 pub type PermutedItem = u32;
 

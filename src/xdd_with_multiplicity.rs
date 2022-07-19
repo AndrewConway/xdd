@@ -483,9 +483,15 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
 /// In particular find_node_index is slow.
 ///
 /// Note that the two special indices are not explicitly stored.
-#[derive(Clone,Eq, PartialEq,Default)]
+#[derive(Clone,Eq, PartialEq)]
 pub struct NodeList<A:NodeAddress,M:Multiplicity> {
     pub(crate) nodes : Vec<NodeWithMultiplicity<A,M>>,
+}
+
+impl <A:NodeAddress,M:Multiplicity> Default for NodeList<A,M> {
+    fn default() -> Self {
+        NodeList{nodes:vec![]}
+    }
 }
 
 impl <A:NodeAddress,M:Multiplicity> XDDBase<A,M> for NodeList<A,M> {
@@ -545,10 +551,16 @@ impl <A:NodeAddress,M:Multiplicity> XDDBase<A,M> for NodeList<A,M> {
 
 /// An extension to NodeList that contains a cache from nodes to indices that is constantly
 /// kept up to date.
-#[derive(Clone,Eq, PartialEq,Default)]
+#[derive(Clone,Eq, PartialEq)]
 pub struct NodeListWithFastLookup<A:NodeAddress,M:Multiplicity> {
     pub(crate) nodes : NodeList<A,M>,
     pub(crate) node_to_index : HashMap<NodeWithMultiplicity<A,M>,A>,
+}
+
+impl <A:NodeAddress,M:Multiplicity> Default for NodeListWithFastLookup<A,M> {
+    fn default() -> Self {
+        NodeListWithFastLookup{ nodes: NodeList::default(), node_to_index: Default::default() }
+    }
 }
 
 impl <A:NodeAddress,M:Multiplicity> XDDBase<A,M> for NodeListWithFastLookup<A,M> {

@@ -21,8 +21,7 @@ use std::hash::Hash;
 use std::io::Write;
 use std::ops::Rem;
 use num::{Integer, Unsigned, Zero};
-use crate::generating_function::GeneratingFunction;
-use crate::xdd_representations::{NodeListWithFastLookup, XDDBase};
+use crate::generating_function::{GeneratingFunction, GeneratingFunctionWithMultiplicity};
 
 /// The identifier of a variable. Variable 0 is the highest one in the diagram.
 #[derive(Copy, Clone,Eq, PartialEq,Hash,Ord, PartialOrd,Debug)]
@@ -234,6 +233,44 @@ impl Node {
 }
 
 /// A object that can function as a decision diagram factory, doing stuff quickly.
+pub trait DecisionDiagramFactoryWithMultiplicity<A:NodeAddress,M:Multiplicity> {
+    /// Make a new decision diagram with the stated number of variables.
+    fn new(num_variables:u16) -> Self;
+    /// Compute a diagram being the logical and of index1 and index2.
+    fn and(&mut self,index1:NodeIndexWithMultiplicity<A,M>,index2:NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M>;
+    /// Compute a diagram being the logical or of index1 and index2.
+    fn or(&mut self,index1:NodeIndexWithMultiplicity<A,M>,index2:NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M>;
+    /// Compute a diagram being the logical not of index1 and index2.
+    fn not(&mut self,index:NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M>;
+    /// Enumerate the solutions to the given generating function.
+    fn number_solutions<G:GeneratingFunctionWithMultiplicity<M>>(&self,index:NodeIndexWithMultiplicity<A,M>) -> G;
+    /// Produce a DD that describes a single variable. That is, a DD that has all variables having no effect other than just that variable leading to TRUE iff variable is true.
+    fn single_variable(&mut self,variable:VariableIndex) -> NodeIndexWithMultiplicity<A,M>;
+    /// Get the number of nodes in the DD.
+    fn len(&self) -> usize;
+    /// Do garbage collection. Provide the items one wants to keep, and get rid of anything not in the transitive dependencies of keep.
+    /// Returns a vector v such that v[old_node.0] is what v maps in to. If nothing, then map into NodeIndex::JUNK.
+    fn gc(&mut self,keep:impl IntoIterator<Item=NodeIndexWithMultiplicity<A,M>>) -> NodeRenamingWithMuliplicity<A>;
+    /// Produce a DD which is true iff exactly 1 of the given variables is true, regardless of other variables.
+    /// The variables array must be sorted, smallest to highest.
+    fn exactly_one_of(&mut self,variables:&[VariableIndex]) -> NodeIndexWithMultiplicity<A,M>;
+    /// Do an "and" of lots of functions.
+    fn poly_and(&mut self,indices:&[NodeIndexWithMultiplicity<A,M>]) -> Option<NodeIndexWithMultiplicity<A,M>> {
+        let mut res : Option<NodeIndexWithMultiplicity<A,M>> = None;
+        for n in indices {
+            if let Some(ni) = res {
+                res=Some(self.and(*n,ni));
+            } else {
+                res=Some(*n);
+            }
+        }
+        res
+    }
+    /// write a graph file to the given writer with a given name showing the DD starting from start_nodes.
+    fn make_dot_file<W:Write,F:Fn(VariableIndex)->String>(&self,writer:&mut W,name:impl Display,start_nodes:&[(NodeIndexWithMultiplicity<A,M>,Option<String>)],namer:F) -> std::io::Result<()>;
+}
+
+/// A object that can function as a decision diagram factory, doing stuff quickly.
 pub trait DecisionDiagramFactory {
     /// Make a new decision diagram with the stated number of variables.
     fn new(num_variables:u16) -> Self;
@@ -271,9 +308,150 @@ pub trait DecisionDiagramFactory {
     fn make_dot_file<W:Write,F:Fn(VariableIndex)->String>(&self,writer:&mut W,name:impl Display,start_nodes:&[(NodeIndex,Option<String>)],namer:F) -> std::io::Result<()>;
 }
 
+
+/// A factory that can do efficient operations on BDDs.
+pub struct BDDFactoryWithMultiplicity<A:NodeAddress,M:Multiplicity> {
+    nodes : xdd_with_multiplicity::NodeListWithFastLookup<A,M>,
+    and_cache : HashMap<(NodeIndexWithMultiplicity<A,M>,NodeIndexWithMultiplicity<A,M>),NodeIndexWithMultiplicity<A,M>>,
+    or_cache : HashMap<(NodeIndexWithMultiplicity<A,M>,NodeIndexWithMultiplicity<A,M>),NodeIndexWithMultiplicity<A,M>>,
+    not_cache : HashMap<A,A>,
+    num_variables : u16,
+}
+
+impl <A:NodeAddress+Default,M:Multiplicity> DecisionDiagramFactoryWithMultiplicity<A,M> for BDDFactoryWithMultiplicity<A,M> {
+
+    fn new(num_variables:u16) -> Self {
+        BDDFactoryWithMultiplicity{
+            nodes: Default::default(),
+            and_cache: Default::default(),
+            or_cache: Default::default(),
+            not_cache: Default::default(),
+            num_variables
+        }
+    }
+    fn and(&mut self, index1: NodeIndexWithMultiplicity<A,M>, index2: NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M> {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.mul_bdd(index1,index2,&mut self.and_cache)
+    }
+
+    fn or(&mut self, index1: NodeIndexWithMultiplicity<A,M>, index2: NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M> {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.sum_bdd(index1,index2,&mut self.or_cache)
+    }
+
+    fn not(&mut self, index:NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M> {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.not_bdd(index,&mut self.not_cache)
+    }
+
+    fn number_solutions<G: GeneratingFunctionWithMultiplicity<M>>(&self, index: NodeIndexWithMultiplicity<A,M>) -> G {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.number_solutions::<G,true>(index,self.num_variables)
+    }
+
+    fn single_variable(&mut self, variable: VariableIndex) -> NodeIndexWithMultiplicity<A,M> {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.single_variable(variable)
+    }
+
+    fn len(&self) -> usize {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.len()
+    }
+
+    fn gc(&mut self,keep:impl IntoIterator<Item=NodeIndexWithMultiplicity<A,M>>) -> NodeRenamingWithMuliplicity<A> {
+        self.and_cache.clear();
+        self.or_cache.clear();
+        self.not_cache.clear();
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.gc(keep)
+    }
+
+    fn exactly_one_of(&mut self, variables: &[VariableIndex]) -> NodeIndexWithMultiplicity<A,M> {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.exactly_one_of_bdd(variables)
+    }
+
+    fn make_dot_file<W:Write,F:Fn(VariableIndex)->String>(&self,writer:&mut W,name:impl Display,start_nodes:&[(NodeIndexWithMultiplicity<A,M>,Option<String>)],namer:F) -> std::io::Result<()> {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.make_dot_file(writer,name,start_nodes,namer)
+    }
+}
+
+/// A factory that can do efficient operations on BDDs.
+pub struct ZDDFactoryWithMultiplicity<A:NodeAddress,M:Multiplicity> {
+    nodes : xdd_with_multiplicity::NodeListWithFastLookup<A,M>,
+    and_cache : HashMap<(NodeIndexWithMultiplicity<A,M>,NodeIndexWithMultiplicity<A,M>),NodeIndexWithMultiplicity<A,M>>,
+    or_cache : HashMap<(NodeIndexWithMultiplicity<A,M>,NodeIndexWithMultiplicity<A,M>),NodeIndexWithMultiplicity<A,M>>,
+    not_cache : HashMap<(A,VariableIndex),A>,
+    num_variables : u16,
+}
+
+impl <A:NodeAddress+Default,M:Multiplicity> DecisionDiagramFactoryWithMultiplicity<A,M> for ZDDFactoryWithMultiplicity<A,M> {
+
+    fn new(num_variables:u16) -> Self {
+        ZDDFactoryWithMultiplicity{
+            nodes: Default::default(),
+            and_cache: Default::default(),
+            or_cache: Default::default(),
+            not_cache: Default::default(),
+            num_variables
+        }
+    }
+    fn and(&mut self, index1: NodeIndexWithMultiplicity<A,M>, index2: NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M> {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.mul_zdd(index1,index2,&mut self.and_cache)
+    }
+
+    fn or(&mut self, index1: NodeIndexWithMultiplicity<A,M>, index2: NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M> {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.sum_zdd(index1,index2,&mut self.or_cache)
+    }
+
+    fn not(&mut self, index:NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M> {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.not_zdd(index,VariableIndex(0),self.num_variables,&mut self.not_cache)
+
+    }
+
+    fn number_solutions<G: GeneratingFunctionWithMultiplicity<M>>(&self, index: NodeIndexWithMultiplicity<A,M>) -> G {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.number_solutions::<G,false>(index,self.num_variables)
+    }
+
+    fn single_variable(&mut self, variable: VariableIndex) -> NodeIndexWithMultiplicity<A,M> {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.single_variable_zdd(variable,self.num_variables) // TODO
+    }
+
+    fn len(&self) -> usize {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.len()
+    }
+
+    fn gc(&mut self,keep:impl IntoIterator<Item=NodeIndexWithMultiplicity<A,M>>) -> NodeRenamingWithMuliplicity<A> {
+        self.and_cache.clear();
+        self.or_cache.clear();
+        self.not_cache.clear();
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.gc(keep)
+    }
+
+    fn exactly_one_of(&mut self, variables: &[VariableIndex]) -> NodeIndexWithMultiplicity<A,M> {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.exactly_one_of_zdd(variables,self.num_variables)
+    }
+
+    fn make_dot_file<W:Write,F:Fn(VariableIndex)->String>(&self,writer:&mut W,name:impl Display,start_nodes:&[(NodeIndexWithMultiplicity<A,M>,Option<String>)],namer:F) -> std::io::Result<()> {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.make_dot_file(writer,name,start_nodes,namer)
+    }
+}
+
+
 /// A factory that can do efficient operations on BDDs.
 pub struct BDDFactory {
-    nodes : NodeListWithFastLookup,
+    nodes : xdd_representations::NodeListWithFastLookup,
     and_cache : HashMap<(NodeIndex,NodeIndex),NodeIndex>,
     or_cache : HashMap<(NodeIndex,NodeIndex),NodeIndex>,
     not_cache : HashMap<NodeIndex,NodeIndex>,
@@ -291,26 +469,32 @@ impl DecisionDiagramFactory for BDDFactory {
         }
     }
     fn and(&mut self, index1: NodeIndex, index2: NodeIndex) -> NodeIndex {
+        use xdd_representations::XDDBase;
         self.nodes.and_bdd(index1,index2,&mut self.and_cache)
     }
 
     fn or(&mut self, index1: NodeIndex, index2: NodeIndex) -> NodeIndex {
+        use xdd_representations::XDDBase;
         self.nodes.or_bdd(index1,index2,&mut self.or_cache)
     }
 
     fn not(&mut self, index:NodeIndex) -> NodeIndex {
+        use xdd_representations::XDDBase;
         self.nodes.not_bdd(index,&mut self.not_cache)
     }
 
     fn number_solutions<G: GeneratingFunction>(&self, index: NodeIndex) -> G {
+        use xdd_representations::XDDBase;
         self.nodes.number_solutions::<G,true>(index,self.num_variables)
     }
 
     fn single_variable(&mut self, variable: VariableIndex) -> NodeIndex {
+        use xdd_representations::XDDBase;
         self.nodes.single_variable(variable)
     }
 
     fn len(&self) -> usize {
+        use xdd_representations::XDDBase;
         self.nodes.len()
     }
 
@@ -318,14 +502,17 @@ impl DecisionDiagramFactory for BDDFactory {
         self.and_cache.clear();
         self.or_cache.clear();
         self.not_cache.clear();
+        use xdd_representations::XDDBase;
         self.nodes.gc(keep)
     }
 
     fn exactly_one_of(&mut self, variables: &[VariableIndex]) -> NodeIndex {
+        use xdd_representations::XDDBase;
         self.nodes.exactly_one_of_bdd(variables)
     }
 
     fn make_dot_file<W:Write,F:Fn(VariableIndex)->String>(&self,writer:&mut W,name:impl Display,start_nodes:&[(NodeIndex,Option<String>)],namer:F) -> std::io::Result<()> {
+        use xdd_representations::XDDBase;
         self.nodes.make_dot_file(writer,name,start_nodes,namer)
     }
 }
@@ -333,7 +520,7 @@ impl DecisionDiagramFactory for BDDFactory {
 
 /// A factory that can do efficient operations on BDDs.
 pub struct ZDDFactory {
-    nodes : NodeListWithFastLookup,
+    nodes : xdd_representations::NodeListWithFastLookup,
     and_cache : HashMap<(NodeIndex,NodeIndex),NodeIndex>,
     or_cache : HashMap<(NodeIndex,NodeIndex),NodeIndex>,
     not_cache : HashMap<(NodeIndex,VariableIndex),NodeIndex>,
@@ -353,26 +540,32 @@ impl DecisionDiagramFactory for ZDDFactory {
     }
 
     fn and(&mut self, index1: NodeIndex, index2: NodeIndex) -> NodeIndex {
+        use xdd_representations::XDDBase;
         self.nodes.and_zdd(index1,index2,&mut self.and_cache)
     }
 
     fn or(&mut self, index1: NodeIndex, index2: NodeIndex) -> NodeIndex {
+        use xdd_representations::XDDBase;
         self.nodes.or_zdd(index1,index2,&mut self.or_cache)
     }
 
     fn not(&mut self, index:NodeIndex) -> NodeIndex {
+        use xdd_representations::XDDBase;
         self.nodes.not_zdd(index,VariableIndex(0),self.num_variables,&mut self.not_cache)
     }
 
     fn number_solutions<G: GeneratingFunction>(&self, index: NodeIndex) -> G {
+        use xdd_representations::XDDBase;
         self.nodes.number_solutions::<G,false>(index,self.num_variables)
     }
 
     fn single_variable(&mut self, variable: VariableIndex) -> NodeIndex {
+        use xdd_representations::XDDBase;
         self.nodes.single_variable_zdd(variable,self.num_variables)
     }
 
     fn len(&self) -> usize {
+        use xdd_representations::XDDBase;
         self.nodes.len()
     }
 
@@ -380,14 +573,17 @@ impl DecisionDiagramFactory for ZDDFactory {
         self.and_cache.clear();
         self.or_cache.clear();
         self.not_cache.clear();
+        use xdd_representations::XDDBase;
         self.nodes.gc(keep)
     }
 
     fn exactly_one_of(&mut self, variables: &[VariableIndex]) -> NodeIndex {
+        use xdd_representations::XDDBase;
         self.nodes.exactly_one_of_zdd(variables,self.num_variables)
     }
 
     fn make_dot_file<W:Write,F:Fn(VariableIndex)->String>(&self,writer:&mut W,name:impl Display,start_nodes:&[(NodeIndex,Option<String>)],namer:F) -> std::io::Result<()> {
+        use xdd_representations::XDDBase;
         self.nodes.make_dot_file(writer,name,start_nodes,namer)
     }
 }
