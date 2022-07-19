@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use xdd::{BDDFactory, BDDFactoryWithMultiplicity, DecisionDiagramFactory, DecisionDiagramFactoryWithMultiplicity, NodeIndex, NodeIndexWithMultiplicity, NoMultiplicity, VariableIndex, ZDDFactory, ZDDFactoryWithMultiplicity};
+use xdd::{BDDFactoryWithMultiplicity, DecisionDiagramFactoryWithMultiplicity,  NodeIndexWithMultiplicity, NoMultiplicity, VariableIndex, ZDDFactoryWithMultiplicity};
 
 type Site = [usize;2];
 type SiteIndex = usize;
@@ -40,18 +40,7 @@ impl TilingProblem {
         self.add_tile(tile);
         true
     }
-    fn find_tiling_solution<F:DecisionDiagramFactory>(&self) -> (F,NodeIndex) {
-        let mut factory = F::new(self.tiles.len() as u16);
-        let mut constraints = Vec::new();
-        for tiles_covering_site in &self.tiles_covering_a_site {
-            let constraint_for_that_site = factory.exactly_one_of(& tiles_covering_site.iter().map(|t|VariableIndex(*t as u16)).collect::<Vec<_>>());
-            constraints.push(constraint_for_that_site);
-        }
-        constraints.reverse(); // much faster to merge later tiles first.
-        let node = factory.poly_and(&constraints).unwrap();
-        (factory,node)
-    }
-    fn find_tiling_solution2<F:DecisionDiagramFactoryWithMultiplicity<u32,NoMultiplicity>>(&self) -> (F,NodeIndexWithMultiplicity<u32,NoMultiplicity>) {
+    fn find_tiling_solution<F:DecisionDiagramFactoryWithMultiplicity<u32,NoMultiplicity>>(&self) -> (F, NodeIndexWithMultiplicity<u32,NoMultiplicity>) {
         let mut factory = F::new(self.tiles.len() as u16);
         let mut constraints = Vec::new();
         for tiles_covering_site in &self.tiles_covering_a_site {
@@ -112,22 +101,9 @@ fn setup_chessboard_tiled_with_up_to_trionimoes(side_length_wanted:usize) -> Til
     problem
 }
 
-
 /// Count using a decision diagram, given a creator function for the factory taking the number of variables.
-fn count_tiling<F:DecisionDiagramFactory>(problem:TilingProblem) -> u128 {
+fn count_tiling<F:DecisionDiagramFactoryWithMultiplicity<u32, NoMultiplicity>>(problem:TilingProblem) -> u128 {
     let (mut factory ,solution) = problem.find_tiling_solution::<F>();
-    let original_len = factory.len();
-    let renamer = factory.gc([solution]);
-    let solution = renamer.rename(solution).unwrap();
-    let solutions : u128 = factory.number_solutions(solution);
-    let gc_len = factory.len();
-    println!("Original len {} gc len {} solutions {}",original_len,gc_len,solutions);
-    solutions
-}
-
-/// Count using a decision diagram, given a creator function for the factory taking the number of variables.
-fn count_tiling2<F:DecisionDiagramFactoryWithMultiplicity<u32, NoMultiplicity>>(problem:TilingProblem) -> u128 {
-    let (mut factory ,solution) = problem.find_tiling_solution2::<F>();
     let original_len = factory.len();
     let renamer = factory.gc([solution]);
     let solution = renamer.rename(solution).unwrap();
@@ -140,48 +116,24 @@ fn count_tiling2<F:DecisionDiagramFactoryWithMultiplicity<u32, NoMultiplicity>>(
 
 #[test]
 fn count_dominoes_bdd() {
-    let solutions = count_tiling::<BDDFactory>(setup_chessboard_tiled_with_dominoes(8));
+    let solutions = count_tiling::<BDDFactoryWithMultiplicity<u32,NoMultiplicity>>(setup_chessboard_tiled_with_dominoes(8));
     assert_eq!(solutions,12988816); // See Knuth, "The art of Computer programming Volume 4, Fascicle 1, Binary Decision Diagrams", section 7.1.4, p119
 }
 
 #[test]
 fn count_dominoes_zdd() {
-    let solutions = count_tiling::<ZDDFactory>(setup_chessboard_tiled_with_dominoes(8));
+    let solutions = count_tiling::<ZDDFactoryWithMultiplicity<u32,NoMultiplicity>>(setup_chessboard_tiled_with_dominoes(8));
     assert_eq!(solutions,12988816); // See Knuth, "The art of Computer programming Volume 4, Fascicle 1, Binary Decision Diagrams", section 7.1.4, p119
 }
 
 #[test]
 fn count_up_to_trionimoes_bdd() {
-    let solutions = count_tiling::<BDDFactory>(setup_chessboard_tiled_with_up_to_trionimoes(8));
+    let solutions = count_tiling::<BDDFactoryWithMultiplicity<u32,NoMultiplicity>>(setup_chessboard_tiled_with_up_to_trionimoes(8));
     assert_eq!(solutions,92109458286284989468604); // See Knuth, "The art of Computer programming Volume 4, Fascicle 1, Binary Decision Diagrams", section 7.1.4, p120
 }
 
 #[test]
 fn count_up_to_trionimoes_zdd() {
-    let solutions = count_tiling::<ZDDFactory>(setup_chessboard_tiled_with_up_to_trionimoes(8));
-    assert_eq!(solutions,92109458286284989468604); // See Knuth, "The art of Computer programming Volume 4, Fascicle 1, Binary Decision Diagrams", section 7.1.4, p120
-}
-
-#[test]
-fn count_dominoes_bdd2() {
-    let solutions = count_tiling2::<BDDFactoryWithMultiplicity<u32,NoMultiplicity>>(setup_chessboard_tiled_with_dominoes(8));
-    assert_eq!(solutions,12988816); // See Knuth, "The art of Computer programming Volume 4, Fascicle 1, Binary Decision Diagrams", section 7.1.4, p119
-}
-
-#[test]
-fn count_dominoes_zdd2() {
-    let solutions = count_tiling2::<ZDDFactoryWithMultiplicity<u32,NoMultiplicity>>(setup_chessboard_tiled_with_dominoes(8));
-    assert_eq!(solutions,12988816); // See Knuth, "The art of Computer programming Volume 4, Fascicle 1, Binary Decision Diagrams", section 7.1.4, p119
-}
-
-#[test]
-fn count_up_to_trionimoes_bdd2() {
-    let solutions = count_tiling2::<BDDFactoryWithMultiplicity<u32,NoMultiplicity>>(setup_chessboard_tiled_with_up_to_trionimoes(8));
-    assert_eq!(solutions,92109458286284989468604); // See Knuth, "The art of Computer programming Volume 4, Fascicle 1, Binary Decision Diagrams", section 7.1.4, p120
-}
-
-#[test]
-fn count_up_to_trionimoes_zdd2() {
-    let solutions = count_tiling2::<ZDDFactoryWithMultiplicity<u32,NoMultiplicity>>(setup_chessboard_tiled_with_up_to_trionimoes(8));
+    let solutions = count_tiling::<ZDDFactoryWithMultiplicity<u32,NoMultiplicity>>(setup_chessboard_tiled_with_up_to_trionimoes(8));
     assert_eq!(solutions,92109458286284989468604); // See Knuth, "The art of Computer programming Volume 4, Fascicle 1, Binary Decision Diagrams", section 7.1.4, p120
 }

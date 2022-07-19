@@ -375,7 +375,8 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
         else if index2.is_false() { index1 }
         // if one of the two is true, then need to add true to both sides of the other to get multiplicities correct. The above line is just an optimization for that case.
         else {
-            let key = if (M::SYMMETRIC_OR && index1.address < index2.address) || index1.address.is_true() {(index1,index2)} else {(index2,index1)};
+            let (index1,index2) = if (M::SYMMETRIC_OR && index1.address < index2.address) || index1.address.is_true() {(index2,index1)} else {(index1,index2)};
+            let key = (index1,index2);
             if let Some(&res) = cache.get(&key) { res }
             else {
                 let node1 = self.node_incorporating_multiplicity(index1);

@@ -18,8 +18,8 @@ use std::fmt::{Display, Formatter};
 use std::io::Write;
 use std::marker::PhantomData;
 use std::ops::Index;
-use crate::{DecisionDiagramFactory, GeneratingFunction, Node, NodeIndex, NodeRenaming, VariableIndex, ZDDFactory};
-use crate::xdd_representations::XDDBase;
+use crate::{DecisionDiagramFactoryWithMultiplicity, NodeWithMultiplicity, NodeIndexWithMultiplicity, NodeRenamingWithMuliplicity, VariableIndex, ZDDFactoryWithMultiplicity, NodeAddress, Multiplicity, GeneratingFunctionWithMultiplicity};
+use crate::xdd_with_multiplicity::XDDBase;
 
 pub type PermutedItem = u32;
 
@@ -246,33 +246,33 @@ impl <I> Index<VariableIndex> for PermutationEncodingAsVariables<I> {
     }
 }
 
-pub struct PermutationDecisionDiagramFactory<I> {
-    pub zdd : ZDDFactory,
+pub struct PermutationDecisionDiagramFactory<I,A:NodeAddress,M:Multiplicity> {
+    pub zdd : ZDDFactoryWithMultiplicity<A,M>,
     pub vars : PermutationEncodingAsVariables<I>,
-    i_cache : HashMap<(NodeIndex,VariableIndex),NodeIndex>, // cache of the "I" operation
-    compose_cache : HashMap<(NodeIndex,NodeIndex),NodeIndex>, // cache of the compose/cross product operation
+    i_cache : HashMap<(NodeIndexWithMultiplicity<A,M>,VariableIndex),NodeIndexWithMultiplicity<A,M>>, // cache of the "I" operation
+    compose_cache : HashMap<(NodeIndexWithMultiplicity<A,M>,NodeIndexWithMultiplicity<A,M>),NodeIndexWithMultiplicity<A,M>>, // cache of the compose/cross product operation
 }
 
-impl <I> PermutationDecisionDiagramFactory<I> {
+impl <I,A:NodeAddress,M:Multiplicity> PermutationDecisionDiagramFactory<I,A,M> {
     /// Note that the argument to new is different to the usual interpretation
     /// of DDs. The argument is the number of elements in the permutation. The
     /// total number of variables will be (num_elements_in_permutation-1)(num_elements_in_permutation-2)/2.
     pub fn new(num_elements_in_permutation: u16) -> Self {
         let vars = PermutationEncodingAsVariables::new(num_elements_in_permutation as PermutedItem);
-        PermutationDecisionDiagramFactory{ zdd: ZDDFactory::new(vars.num_variables()), vars, i_cache:Default::default(), compose_cache: Default::default() }
+        PermutationDecisionDiagramFactory{ zdd: ZDDFactoryWithMultiplicity::new(vars.num_variables()), vars, i_cache:Default::default(), compose_cache: Default::default() }
     }
 
     // Standard DD operations just delegate to the underlying ZDD. But does not implement DecisionDiagramFactory as it is not really one.
 
-    pub fn and(&mut self, index1: NodeIndex, index2: NodeIndex) -> NodeIndex { self.zdd.and(index1,index2) }
-    pub fn or(&mut self, index1: NodeIndex, index2: NodeIndex) -> NodeIndex { self.zdd.or(index1,index2) }
-    pub fn not(&mut self, index: NodeIndex) -> NodeIndex { self.zdd.not(index) }
-    pub fn number_solutions<G: GeneratingFunction>(&self, index: NodeIndex) -> G { self.zdd.number_solutions::<G>(index) }
-    pub fn single_variable(&mut self, variable: VariableIndex) -> NodeIndex { self.zdd.single_variable(variable) }
+    pub fn and(&mut self, index1: NodeIndexWithMultiplicity<A,M>, index2: NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M> { self.zdd.and(index1,index2) }
+    pub fn or(&mut self, index1: NodeIndexWithMultiplicity<A,M>, index2: NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M> { self.zdd.or(index1,index2) }
+    pub fn not(&mut self, index: NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M> { self.zdd.not(index) }
+    pub fn number_solutions<G: GeneratingFunctionWithMultiplicity<M>>(&self, index: NodeIndexWithMultiplicity<A,M>) -> G { self.zdd.number_solutions::<G>(index) }
+    pub fn single_variable(&mut self, variable: VariableIndex) -> NodeIndexWithMultiplicity<A,M> { self.zdd.single_variable(variable) }
     pub fn len(&self) -> usize { self.zdd.len() }
-    pub fn exactly_one_of(&mut self, variables: &[VariableIndex]) -> NodeIndex { self.zdd.exactly_one_of(variables) }
+    pub fn exactly_one_of(&mut self, variables: &[VariableIndex]) -> NodeIndexWithMultiplicity<A,M> { self.zdd.exactly_one_of(variables) }
 
-    pub fn gc(&mut self, keep: impl IntoIterator<Item=NodeIndex>) -> NodeRenaming {
+    pub fn gc(&mut self, keep: impl IntoIterator<Item=NodeIndexWithMultiplicity<A,M>>) -> NodeRenamingWithMuliplicity<A> {
         self.i_cache.clear();
         self.compose_cache.clear();
         self.zdd.gc(keep)
@@ -283,20 +283,20 @@ impl <I> PermutationDecisionDiagramFactory<I> {
         }*/
 }
 
-impl <I> PermutationDecisionDiagramFactory<I> {
+impl <I,A:NodeAddress,M:Multiplicity> PermutationDecisionDiagramFactory<I,A,M> {
     /// create a new node, or use existing if not present.
-    fn create(&mut self,variable:VariableIndex,lo:NodeIndex,hi:NodeIndex) -> NodeIndex {
-        self.zdd.nodes.add_node_if_not_present(Node{variable,lo,hi})
+    fn create(&mut self,variable:VariableIndex,lo:NodeIndexWithMultiplicity<A,M>,hi:NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M> {
+        self.zdd.nodes.add_node_if_not_present(NodeWithMultiplicity{variable,lo,hi})
     }
 
 }
 
-impl <T> PermutationDecisionDiagramFactory<T> where PermutationElement<T>:Display {
-    pub fn make_dot_file_default_names<W:Write>(&self,writer:&mut W,name:impl Display,start_nodes:&[(NodeIndex,Option<String>)]) -> std::io::Result<()> {
+impl <I,A:NodeAddress,M:Multiplicity> PermutationDecisionDiagramFactory<I,A,M> where PermutationElement<I>:Display {
+    pub fn make_dot_file_default_names<W:Write>(&self,writer:&mut W,name:impl Display,start_nodes:&[(NodeIndexWithMultiplicity<A,M>,Option<String>)]) -> std::io::Result<()> {
         self.zdd.make_dot_file(writer,name,start_nodes,|v|self.vars[v].to_string())
     }
 }
-impl PermutationDecisionDiagramFactory<Swap> {
+impl <A:NodeAddress,M:Multiplicity> PermutationDecisionDiagramFactory<Swap,A,M> {
     /// Perform the SWAP operation on a πDD. That is, convert the permutations
     /// considered by the tree starting at node to another one with the addition
     /// of the transposition τ(i,j)
@@ -317,14 +317,14 @@ impl PermutationDecisionDiagramFactory<Swap> {
     /// factory.make_dot_file_default_names(&mut std::fs::File::create("swap.gv").unwrap(),"dd",&[(swap13,Some("swap13".to_string())),(swap13_34,Some("swap13_34".to_string())),(swap13_34_14,Some("swap13_34_14".to_string())),(swap34,Some("swap34".to_string()))]);
     /// assert_eq!(swap34,swap13_34_14);
     /// ```
-    pub fn swap(&mut self, node_index: NodeIndex, i: PermutedItem, j: PermutedItem) -> NodeIndex {
+    pub fn swap(&mut self, node_index: NodeIndexWithMultiplicity<A,M>, i: PermutedItem, j: PermutedItem) -> NodeIndexWithMultiplicity<A,M> {
         if i == j { node_index } else if i > j { self.swap(node_index, j, i) } else {
             assert!(i < j);
-            if node_index.is_false() { NodeIndex::FALSE } else if node_index.is_true() { self.create(self.vars.variable(i, j), NodeIndex::FALSE, NodeIndex::TRUE) } else {
+            if node_index.is_false() { NodeIndexWithMultiplicity::FALSE } else if node_index.is_true() { self.create(self.vars.variable(i, j), NodeIndexWithMultiplicity::FALSE, NodeIndexWithMultiplicity::TRUE).multiply(node_index.multiplicity) } else {
                 let variable = self.vars.variable(i, j);
-                let node = self.zdd.nodes.node(node_index);
+                let node = self.zdd.nodes.node_incorporating_multiplicity(node_index);
                 let node_variable = self.vars[node.variable];
-                if node_variable.elem2 < j { self.create(variable, NodeIndex::FALSE, node_index) } // this is something lower down the diagram than the variable.
+                if node_variable.elem2 < j { self.create(variable, NodeIndexWithMultiplicity::FALSE, node_index) } // this is something lower down the diagram than the variable.
                 else {
                     let cache_key = (node_index, variable);
                     if let Some(cached_answer) = self.i_cache.get(&cache_key) { *cached_answer } else {
@@ -363,11 +363,11 @@ impl PermutationDecisionDiagramFactory<Swap> {
     /// assert_eq!(s_n,factory.compose(s_n,some_mix));
     /// assert_eq!(s_n,factory.compose(some_mix,s_n));
     /// ```
-    pub fn compose(&mut self, p: NodeIndex, q: NodeIndex) -> NodeIndex {
-        if p.is_false() || q.is_false() { NodeIndex::FALSE } else if p.is_true() { q } else if q.is_true() { p } else {
+    pub fn compose(&mut self, p: NodeIndexWithMultiplicity<A,M>, q: NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M> {
+        if p.is_false() || q.is_false() { NodeIndexWithMultiplicity::FALSE } else if p.is_true() { q.multiply(p.multiplicity) } else if q.is_true() { p.multiply(q.multiplicity) } else {
             let cache_key = (p,q);
             if let Some(cached_answer) = self.compose_cache.get(&cache_key) { *cached_answer } else {
-                let q_node = self.zdd.nodes.node(q);
+                let q_node = self.zdd.nodes.node_incorporating_multiplicity(q);
                 let q_var = self.vars[q_node.variable];
                 let lo = self.compose(p, q_node.lo);
                 let hi = self.compose(p, q_node.hi);
@@ -389,8 +389,8 @@ impl PermutationDecisionDiagramFactory<Swap> {
     /// factory.make_dot_file_default_names(&mut std::fs::File::create("S_4.gv").unwrap(),"Sn",&[(s_n,None)]);
     /// assert_eq!(24,factory.number_solutions::<u64>(s_n));
     /// ```
-    pub fn construct_all_permutations(&mut self) -> NodeIndex {
-        let mut res = NodeIndex::TRUE;
+    pub fn construct_all_permutations(&mut self) -> NodeIndexWithMultiplicity<A,M> {
+        let mut res = NodeIndexWithMultiplicity::TRUE;
         for i in 1..=self.vars.n {
             let prev = res;
             for j in 1..i {
@@ -402,7 +402,7 @@ impl PermutationDecisionDiagramFactory<Swap> {
     }
 }
 
-impl PermutationDecisionDiagramFactory<LeftRotation> {
+impl <A:NodeAddress,M:Multiplicity>  PermutationDecisionDiagramFactory<LeftRotation,A,M> {
     /// Perform the SWAP operation on a Rot-πDD. That is, convert the permutations
     /// considered by the tree starting at node to another one with the addition
     /// of the left rotation ρ(i,j)
@@ -428,15 +428,15 @@ impl PermutationDecisionDiagramFactory<LeftRotation> {
     /// assert_eq!(rot13_13,rot12_23);
     /// assert_eq!(NodeIndex::TRUE,factory.left_rot(rot13_13,1,3));
     /// ```
-    pub fn left_rot(&mut self, node_index: NodeIndex, l: PermutedItem, r: PermutedItem) -> NodeIndex {
+    pub fn left_rot(&mut self, node_index: NodeIndexWithMultiplicity<A,M>, l: PermutedItem, r: PermutedItem) -> NodeIndexWithMultiplicity<A,M> {
         if l == r { node_index } else if l > r { self.left_rot(node_index, r, l) } else {
             assert!(l < r);
             assert!(r <=self.vars.n);
-            if node_index.is_false() { NodeIndex::FALSE } else if node_index.is_true() { self.create(self.vars.variable(l, r), NodeIndex::FALSE, NodeIndex::TRUE) } else {
+            if node_index.is_false() { NodeIndexWithMultiplicity::FALSE } else if node_index.is_true() { self.create(self.vars.variable(l, r), NodeIndexWithMultiplicity::FALSE, NodeIndexWithMultiplicity::TRUE).multiply(node_index.multiplicity) } else {
                 let variable = self.vars.variable(l, r);
-                let node = self.zdd.nodes.node(node_index);
+                let node = self.zdd.nodes.node_incorporating_multiplicity(node_index);
                 let node_variable = self.vars[node.variable]; // in YI's notation, x=node_variable.elem1, y=node_variable.elem2.
-                if node_variable.elem2 < r { self.create(variable, NodeIndex::FALSE, node_index) } // this is something lower down the diagram than the variable.
+                if node_variable.elem2 < r { self.create(variable, NodeIndexWithMultiplicity::FALSE, node_index) } // this is something lower down the diagram than the variable.
                 else {
                     let cache_key = (node_index, variable);
                     if let Some(cached_answer) = self.i_cache.get(&cache_key) { *cached_answer } else {
@@ -483,11 +483,11 @@ impl PermutationDecisionDiagramFactory<LeftRotation> {
     /// assert_eq!(s_n,factory.compose(s_n,some_mix));
     /// assert_eq!(s_n,factory.compose(some_mix,s_n));
     /// ```
-    pub fn compose(&mut self, p: NodeIndex, q: NodeIndex) -> NodeIndex {
-        if p.is_false() || q.is_false() { NodeIndex::FALSE } else if p.is_true() { q } else if q.is_true() { p } else {
+    pub fn compose(&mut self, p: NodeIndexWithMultiplicity<A,M>, q: NodeIndexWithMultiplicity<A,M>) -> NodeIndexWithMultiplicity<A,M> {
+        if p.is_false() || q.is_false() { NodeIndexWithMultiplicity::FALSE } else if p.is_true() { q.multiply(p.multiplicity) } else if q.is_true() { p.multiply(q.multiplicity) } else {
             let cache_key = (p,q);
             if let Some(cached_answer) = self.compose_cache.get(&cache_key) { *cached_answer } else {
-                let q_node = self.zdd.nodes.node(q);
+                let q_node = self.zdd.nodes.node_incorporating_multiplicity(q);
                 let q_var = self.vars[q_node.variable];
                 let lo = self.compose(p, q_node.lo);
                 let hi = self.compose(p, q_node.hi);
@@ -509,8 +509,8 @@ impl PermutationDecisionDiagramFactory<LeftRotation> {
     /// factory.make_dot_file_default_names(&mut std::fs::File::create("rot_S_4.gv").unwrap(),"Sn",&[(s_n,None)]);
     /// assert_eq!(24,factory.number_solutions::<u64>(s_n));
     /// ```
-    pub fn construct_all_permutations(&mut self) -> NodeIndex {
-        let mut res = NodeIndex::TRUE;
+    pub fn construct_all_permutations(&mut self) -> NodeIndexWithMultiplicity<A,M> {
+        let mut res = NodeIndexWithMultiplicity::TRUE;
         for i in 1..=self.vars.n {
             let prev = res;
             for j in 1..i {
@@ -523,9 +523,9 @@ impl PermutationDecisionDiagramFactory<LeftRotation> {
 
     /// Get a set containing the single specified permutation.
     /// panics if the permutation argument is not a permutation of 1..n.
-    pub fn compute_for_single_permutation(&mut self,permutation:&[PermutedItem]) -> NodeIndex {
+    pub fn compute_for_single_permutation(&mut self,permutation:&[PermutedItem]) -> NodeIndexWithMultiplicity<A,M> {
         let decomposition = PermutationElement::<LeftRotation>::get_permutation(permutation);
-        let mut res = NodeIndex::TRUE;
+        let mut res = NodeIndexWithMultiplicity::TRUE;
         for e in decomposition.iter().rev() {
             res = self.left_rot(res,e.elem1,e.elem2);
         }
