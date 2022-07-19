@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 //use std::fs::File;
 use xdd::{NodeIndexWithMultiplicity, NoMultiplicity, VariableIndex};
-use xdd::generating_function::SingleVariableGeneratingFunction;
+use xdd::generating_function::{GeneratingFunctionSplitByMultiplicity, SingleVariableGeneratingFunction};
 use xdd::xdd_with_multiplicity::{NodeList, NodeListWithFastLookup, XDDBase};
 
 
@@ -79,13 +79,13 @@ fn zdd_basic_ops<F:XDDBase<usize, NoMultiplicity>+Default>() {
     assert_eq!(1,factory.number_solutions_zdd::<u64>(and_v0_v1,2));
     assert_eq!(3,factory.number_solutions_zdd::<u64>(or_v0_v1,2));
 
-    assert_eq!(SingleVariableGeneratingFunction(vec![1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(NodeIndexWithMultiplicity::TRUE,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(NodeIndexWithMultiplicity::FALSE,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(v1,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(v0,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![1,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(not_v0,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,0,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(and_v0_v1,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,2,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(or_v0_v1,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndexWithMultiplicity::TRUE,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndexWithMultiplicity::FALSE,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(v1,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(v0,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![1,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(not_v0,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,0,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(and_v0_v1,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,2,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(or_v0_v1,2));
 
     // Check GC
     let map = factory.gc([or_v0_v1,and_v0_v1]);
@@ -189,18 +189,21 @@ fn multiplicities_zdd_basic_ops<F:XDDBase<usize, u32>+Default>() {
     assert_eq!(1,factory.number_solutions_zdd::<u64>(and_v0_v1,2));
     assert_eq!(4,factory.number_solutions_zdd::<u64>(or_v0_v1,2));
 
-    assert_eq!(SingleVariableGeneratingFunction(vec![1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(NodeIndexWithMultiplicity::TRUE,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(NodeIndexWithMultiplicity::FALSE,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(v1,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(v0,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![1,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(not_v0,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,0,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(and_v0_v1,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,2,2]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(or_v0_v1,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndexWithMultiplicity::TRUE,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndexWithMultiplicity::FALSE,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(v1,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(v0,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![1,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(not_v0,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,0,1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(and_v0_v1,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,2,2]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(or_v0_v1,2));
     let doubled_or = factory.sum_zdd(or_v0_v1,or_v0_v1,&mut HashMap::new());
     let squared_or = factory.mul_zdd(or_v0_v1,or_v0_v1,&mut HashMap::new());
     // factory.make_dot_file(&mut File::create("doubled_or.gv").unwrap(),"x",&[(doubled_or,Some("doubled_or".to_string())),(squared_or,Some("squared_or".to_string())),(or_v0_v1,Some("Or".to_string()))],|v|if v.0==0 {"x".to_string()} else {"y".to_string()}).unwrap();
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,4,4]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(doubled_or,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,2,4]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(squared_or,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,4,4]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(doubled_or,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,2,4]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(squared_or,2));
+    assert_eq!(GeneratingFunctionSplitByMultiplicity(vec![2,1]),factory.number_solutions_zdd::<GeneratingFunctionSplitByMultiplicity::<u64>>(or_v0_v1,2));
+    assert_eq!(GeneratingFunctionSplitByMultiplicity(vec![0,2,0,1]),factory.number_solutions_zdd::<GeneratingFunctionSplitByMultiplicity::<u64>>(doubled_or,2));
+    assert_eq!(GeneratingFunctionSplitByMultiplicity(vec![2,0,0,1]),factory.number_solutions_zdd::<GeneratingFunctionSplitByMultiplicity::<u64>>(squared_or,2));
 
     // Check GC
     let map = factory.gc([or_v0_v1,and_v0_v1]);
@@ -305,19 +308,19 @@ fn bdd_basic_ops<F:XDDBase<usize, NoMultiplicity>+Default>() {
     assert_eq!(3,factory.number_solutions_bdd::<u64>(not_and_v0_v1,2));
     //assert_eq!(3,factory.number_solutions_bdd::<u64>(or_v0_v1,2));
 
-    assert_eq!(SingleVariableGeneratingFunction(vec![1,2,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(NodeIndexWithMultiplicity::TRUE,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(NodeIndexWithMultiplicity::FALSE,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(v1,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(v0,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![1,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(not_v0,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,0,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(and_v0_v1,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,2,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(or_v0_v1,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![1,2]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(not_and_v0_v1,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![1,2,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndexWithMultiplicity::TRUE,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndexWithMultiplicity::FALSE,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(v1,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(v0,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![1,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(not_v0,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,0,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(and_v0_v1,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,2,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(or_v0_v1,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![1,2]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(not_and_v0_v1,2));
     let doubled_or = factory.sum_bdd(or_v0_v1,or_v0_v1,&mut HashMap::new());
     let squared_or = factory.mul_bdd(or_v0_v1,or_v0_v1,&mut HashMap::new());
     // factory.make_dot_file(&mut File::create("doubled_or.gv").unwrap(),"x",&[(doubled_or,Some("doubled_or".to_string())),(squared_or,Some("squared_or".to_string())),(or_v0_v1,Some("Or".to_string()))],|v|if v.0==0 {"x".to_string()} else {"y".to_string()}).unwrap();
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,2,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(doubled_or,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,2,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(squared_or,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,2,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(doubled_or,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,2,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(squared_or,2));
 
     // Check GC
     let map = factory.gc([or_v0_v1,and_v0_v1]);
@@ -423,19 +426,22 @@ fn bdd_basic_ops_with_multiplicities<F:XDDBase<usize, u32>+Default>() {
     assert_eq!(3,factory.number_solutions_bdd::<u64>(not_and_v0_v1,2));
     //assert_eq!(3,factory.number_solutions_bdd::<u64>(or_v0_v1,2));
 
-    assert_eq!(SingleVariableGeneratingFunction(vec![1,2,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(NodeIndexWithMultiplicity::TRUE,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(NodeIndexWithMultiplicity::FALSE,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(v1,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(v0,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![1,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(not_v0,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,0,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(and_v0_v1,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,2,2]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(or_v0_v1,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![1,2,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndexWithMultiplicity::TRUE,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndexWithMultiplicity::FALSE,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(v1,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,1,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(v0,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![1,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(not_v0,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,0,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(and_v0_v1,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,2,2]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(or_v0_v1,2));
     let doubled_or = factory.sum_bdd(or_v0_v1,or_v0_v1,&mut HashMap::new());
     let squared_or = factory.mul_bdd(or_v0_v1,or_v0_v1,&mut HashMap::new());
     // factory.make_dot_file(&mut File::create("doubled_or.gv").unwrap(),"x",&[(doubled_or,Some("doubled_or".to_string())),(squared_or,Some("squared_or".to_string())),(or_v0_v1,Some("Or".to_string()))],|v|if v.0==0 {"x".to_string()} else {"y".to_string()}).unwrap();
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,4,4]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(doubled_or,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![0,2,4]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(squared_or,2));
-    assert_eq!(SingleVariableGeneratingFunction(vec![1,2]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction>(not_and_v0_v1,2));
+    assert_eq!(GeneratingFunctionSplitByMultiplicity(vec![2,1]),factory.number_solutions_bdd::<GeneratingFunctionSplitByMultiplicity::<u64>>(or_v0_v1,2));
+    assert_eq!(GeneratingFunctionSplitByMultiplicity(vec![0,2,0,1]),factory.number_solutions_bdd::<GeneratingFunctionSplitByMultiplicity::<u64>>(doubled_or,2));
+    assert_eq!(GeneratingFunctionSplitByMultiplicity(vec![2,0,0,1]),factory.number_solutions_bdd::<GeneratingFunctionSplitByMultiplicity::<u64>>(squared_or,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,4,4]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(doubled_or,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![0,2,4]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(squared_or,2));
+    assert_eq!(SingleVariableGeneratingFunction(vec![1,2]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(not_and_v0_v1,2));
 
     // Check GC
     let map = factory.gc([or_v0_v1,and_v0_v1]);

@@ -1,5 +1,5 @@
 use std::fmt::Debug;
-use std::ops::Mul;
+use std::ops::{AddAssign, Mul, MulAssign};
 use num::Integer;
 use crate::{NoMultiplicity, VariableIndex};
 
@@ -70,22 +70,21 @@ impl <G:GeneratingFunction,I:Into<G>+Ord> GeneratingFunctionWithMultiplicity<I> 
 
 
 #[derive(Clone,Eq, PartialEq,Debug)]
-pub struct SingleVariableGeneratingFunction(pub Vec<u64>);
+pub struct SingleVariableGeneratingFunction<E:Integer>(pub Vec<E>);
 
-impl GeneratingFunction for SingleVariableGeneratingFunction {
+impl <E:Clone+Eq+PartialEq+Debug+Clone+Integer+AddAssign> GeneratingFunction for SingleVariableGeneratingFunction<E> {
     fn zero() -> Self {
         SingleVariableGeneratingFunction(vec![])
     }
 
     fn one() -> Self {
-        SingleVariableGeneratingFunction(vec![1])
+        SingleVariableGeneratingFunction(vec![E::one()])
     }
 
     fn add(self, other: Self) -> Self {
         let SingleVariableGeneratingFunction(mut res) = self;
         let SingleVariableGeneratingFunction(other) = other;
-        for i in 0..other.len() {
-            let v = other[i];
+        for (i,v) in other.into_iter().enumerate() {
             if res.len()>i { res[i]+=v } else { res.push(v) }
         }
         SingleVariableGeneratingFunction(res)
@@ -94,21 +93,64 @@ impl GeneratingFunction for SingleVariableGeneratingFunction {
     /// shift up by one
     fn variable_set(self, _variable: VariableIndex) -> Self {
         let SingleVariableGeneratingFunction(mut res) = self;
-        if res.len()>0 { res.insert(0,0); }
+        if res.len()>0 { res.insert(0,E::zero()); }
         SingleVariableGeneratingFunction(res)
     }
 }
 
-impl <M:Copy+Integer+TryInto<u64>> GeneratingFunctionWithMultiplicity<M> for SingleVariableGeneratingFunction {
+impl <E:Clone+Eq+PartialEq+Debug+Clone+Integer+AddAssign+MulAssign,M:Copy+Integer+TryInto<E>> GeneratingFunctionWithMultiplicity<M> for SingleVariableGeneratingFunction<E> {
     fn multiply(self, multiple: M) -> Self {
         let mut res = self;
-        let multiple : u64 = multiple.try_into().map_err(|_|()).expect("Could not convert multiplicity into generating function element type");
+        let multiple : E = multiple.try_into().map_err(|_|()).expect("Could not convert multiplicity into generating function element type");
         for i in 0..res.0.len() {
-            res.0[i]*=multiple;
+            res.0[i]*=multiple.clone();
         }
         res
     }
 }
+
+
+/// A generating function whose i^th element is the number of elements in the set with multiplicity i+1.
+#[derive(Clone,Eq, PartialEq,Debug)]
+pub struct GeneratingFunctionSplitByMultiplicity<E:Integer>(pub Vec<E>);
+
+impl <E:Clone+Eq+PartialEq+Debug+Clone+Integer+AddAssign> GeneratingFunction for GeneratingFunctionSplitByMultiplicity<E> {
+    fn zero() -> Self {
+        GeneratingFunctionSplitByMultiplicity(vec![])
+    }
+
+    fn one() -> Self {
+        GeneratingFunctionSplitByMultiplicity(vec![E::one()])
+    }
+
+    fn add(self, other: Self) -> Self {
+        let GeneratingFunctionSplitByMultiplicity(mut res) = self;
+        let GeneratingFunctionSplitByMultiplicity(other) = other;
+        for (i,v) in other.into_iter().enumerate() {
+            if res.len()>i { res[i]+=v } else { res.push(v) }
+        }
+        GeneratingFunctionSplitByMultiplicity(res)
+    }
+
+    /// don't care about variables.
+    fn variable_set(self, _variable: VariableIndex) -> Self { self }
+}
+
+impl <E:Clone+Eq+PartialEq+Debug+Clone+Integer+AddAssign,M:Copy+Integer+TryInto<u64>> GeneratingFunctionWithMultiplicity<M> for GeneratingFunctionSplitByMultiplicity<E> {
+    fn multiply(self, multiple: M) -> Self {
+        let multiple : u64 = multiple.try_into().map_err(|_|()).expect("Could not convert multiplicity into u64");
+        if multiple > 0 && self.0.len()>0 {
+            // want position i-1 to go to position multiple*i-1. So insert multiple-1 zeros before each element.
+            let mut res = vec![];
+            for e in self.0 {
+                for _ in 1..multiple { res.push(E::zero())}
+                res.push(e);
+            }
+            GeneratingFunctionSplitByMultiplicity(res)
+        } else { self }
+    }
+}
+
 
 #[derive(Clone,Eq, PartialEq,Debug)]
 /// a generating function with a fixed maximum length

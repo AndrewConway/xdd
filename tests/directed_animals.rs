@@ -74,7 +74,7 @@ fn count_zdd_old() {
         }
     }
     //factory.print(function.unwrap());
-    let result = factory.number_solutions_zdd::<SingleVariableGeneratingFunction>(function.unwrap(),num_variables);
+    let result = factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(function.unwrap(),num_variables);
     println!("{:?}",result);
     assert_eq!(1,result.0[0]);
     assert_eq!(1,result.0[1]);
