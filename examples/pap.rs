@@ -1,7 +1,9 @@
 use std::ops::RangeInclusive;
 use clap::Parser;
 use xdd::generating_function::GeneratingFunctionSplitByMultiplicity;
+use xdd::permutation::Permutation;
 use xdd::permutation_diagrams::{factorial, LeftRotation, PermutationDecisionDiagramFactory};
+use std::str::FromStr;
 
 /// Pattern avoiding permutations
 ///
@@ -17,16 +19,18 @@ struct Args {
     /// The lengths of permutations to iterate for.
     #[clap(parse(try_from_str = xdd::util::parse_range_inclusive))]
     range : RangeInclusive<u32>,
+    /// The pattern to count instances of.
+    #[clap(parse(try_from_str = xdd::permutation::Permutation::from_str))]
+    pattern : Permutation,
 }
 
 
 fn main() {
     let args = Args::parse();
-    let pattern = [1,3,2,4];
 
     for n in args.range {
         let mut factory = PermutationDecisionDiagramFactory::<LeftRotation,u32,u32>::new(n as u16);
-        let containing = factory.permutations_containing_a_given_pattern(&pattern);
+        let containing = factory.permutations_containing_a_given_pattern(&args.pattern.sequence);
         println!("Terms created {}",factory.len());
         let num_containing : GeneratingFunctionSplitByMultiplicity::<u128> = factory.number_solutions(containing);
         let zero = factorial::<u128>(n as u32)-num_containing.0.iter().fold(0,|a,b|a + *b);

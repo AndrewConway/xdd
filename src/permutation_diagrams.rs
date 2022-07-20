@@ -20,47 +20,10 @@ use std::marker::PhantomData;
 use std::ops::{Div, Index, MulAssign};
 use num::Num;
 use crate::{DecisionDiagramFactory, Node, NodeIndex, NodeRenaming, VariableIndex, ZDDFactory, NodeAddress, Multiplicity, GeneratingFunctionWithMultiplicity};
+use crate::permutation::PermutedItem;
 use crate::xdd_with_multiplicity::XDDBase;
 
-pub type PermutedItem = u32;
 
-/// A permutation π = (π(1),π(2),…,π(n)) on n elements
-/// Note that indices are 1 based to match general convention for permutations!
-pub struct Permutation {
-    /// The representation permutation of the integers 1..n
-    pub sequence : Vec<PermutedItem>
-}
-
-impl Index<PermutedItem> for Permutation {
-    type Output = PermutedItem;
-    fn index(&self, index: PermutedItem) -> &Self::Output { &self.sequence[(index-1) as usize] }
-}
-
-impl Permutation {
-    /// The number of elements being permuted.
-    /// /// # Example
-    /// ```
-    /// use xdd::permutation_diagrams::Permutation;
-    /// let x = Permutation { sequence: vec![4,5,2,1,3] };
-    /// assert_eq!(5,x.n());
-    /// ```
-    pub fn n(&self) -> usize { self.sequence.len() }
-
-    /// Apply one permutation to the other.
-    /// The composition of two permutations π and σ is π·σ = ( σ(π(1)),…,σ(π(n)) )
-    /// # Example
-    /// ```
-    /// use xdd::permutation_diagrams::Permutation;
-    /// let x = Permutation { sequence: vec![4,5,2,1,3] };
-    /// let y = Permutation { sequence: vec![4,1,3,5,2] };
-    /// assert_eq!(vec![5,2,1,4,3],x.compose(&y).sequence);
-    /// ```
-    pub fn compose(&self,other:&Permutation) -> Permutation {
-        Permutation{
-            sequence : self.sequence.iter().map(|&i|other[i]).collect()
-        }
-    }
-}
 
 /// This is a placeholder indicating that a permutation element should be considered a swap, as described in
 ///

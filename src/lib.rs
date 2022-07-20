@@ -12,8 +12,9 @@
 
 pub mod generating_function;
 pub mod permutation_diagrams;
-pub mod xdd_with_multiplicity;
+pub(crate) mod xdd_with_multiplicity;
 pub mod util;
+pub mod permutation;
 
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
