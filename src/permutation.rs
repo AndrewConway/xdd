@@ -81,7 +81,6 @@ impl FromStr for Permutation {
         };
         let mut sequence : Vec<PermutedItem> = vec![];
         for s in strings {
-            println!("{}",s);
             sequence.push(s.parse().map_err(|_|ParsePermutationError::NumberFormat(s.to_string()))?);
         }
         let res = Permutation{sequence};

@@ -2,7 +2,7 @@ use std::ops::RangeInclusive;
 use clap::Parser;
 use xdd::generating_function::GeneratingFunctionSplitByMultiplicity;
 use xdd::permutation::Permutation;
-use xdd::permutation_diagrams::{factorial, LeftRotation, PermutationDecisionDiagramFactory};
+use xdd::permutation_diagrams::{factorial, LeftRotation, n_choose_r, PermutationDecisionDiagramFactory};
 use std::str::FromStr;
 
 /// Pattern avoiding permutations
@@ -27,17 +27,44 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
+    let mut triangle : OEISTriangle<u128> = Default::default();
 
+    let pattern_len = args.pattern.sequence.len() as u32;
     for n in args.range {
         let mut factory = PermutationDecisionDiagramFactory::<LeftRotation,u32,u32>::new(n as u16);
         let containing = factory.permutations_containing_a_given_pattern(&args.pattern.sequence);
-        println!("Terms created {}",factory.len());
-        let num_containing : GeneratingFunctionSplitByMultiplicity::<u128> = factory.number_solutions(containing);
-        let zero = factorial::<u128>(n as u32)-num_containing.0.iter().fold(0,|a,b|a + *b);
-        print!("{}\t{}",n,zero);
-        for v in num_containing.0 {
+        println!("\nTerms created {}",factory.len());
+        let mut num_containing : GeneratingFunctionSplitByMultiplicity::<u128> = factory.number_solutions(containing);
+        let zero = factorial::<u128>(n as u32)-num_containing.0.iter().fold(0,|a,b|a + *b); // the number of elements that avoid the pattern.
+        num_containing.0.insert(0,zero);
+        print!("{}",n);
+        for &v in &num_containing.0 {
             print!("\t{}",v);
         }
         println!();
+        // make a format more suitable for OEIS.
+        if n>pattern_len { num_containing.0.resize(n_choose_r::<usize>(n,pattern_len)+1,0); }
+        triangle.push(num_containing.0);
+        triangle.print_as_single_line();
+        triangle.print_as_triangle();
     }
+}
+
+#[derive(Default)]
+struct OEISTriangle<T> {
+    triangle : Vec<Vec<T>>
+}
+
+impl <T:ToString+Clone> OEISTriangle<T> {
+    pub fn print_as_single_line(&self) {
+        let line = self.triangle.iter().flatten().map(|v|v.to_string()).collect::<Vec<_>>().join(",");
+        println!("{}",line);
+    }
+    pub fn print_as_triangle(&self) {
+        println!("Triangle begins:");
+        for row in &self.triangle {
+            println!("{}",row.iter().map(|v|v.to_string()).collect::<Vec<_>>().join(" "));
+        }
+    }
+    pub fn push(&mut self,row : Vec<T>) { self.triangle.push(row); }
 }
