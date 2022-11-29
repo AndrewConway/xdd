@@ -217,6 +217,11 @@ pub trait DecisionDiagramFactory<A:NodeAddress,M:Multiplicity> {
         res
     }
     /// write a graph file to the given writer with a given name showing the DD starting from start_nodes.
+    /// Requires
+    /// * a writer for where to store the result
+    /// * a name (heading), typically a string.
+    /// * a slice of nodes and optional associated names for the start points of interest for the diagram. Often there is just one of these, but often more are useful.
+    /// * a namer function from a VariableIndex to a String.
     fn make_dot_file<W:Write,F:Fn(VariableIndex)->String>(&self, writer:&mut W, name:impl Display, start_nodes:&[(NodeIndex<A,M>, Option<String>)], namer:F) -> std::io::Result<()>;
 }
 

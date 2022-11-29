@@ -4,7 +4,8 @@ use num::Integer;
 use crate::{NoMultiplicity, VariableIndex};
 
 /// A Generating Function is some aggregate of the variables. This could be:
-///  * An integer, being the number of solutions.
+///  * An integer, being the number of solutions. (u64, u128)
+///  * An array, being the number of solutions with a given number of the variables true (SingleVariableGeneratingFunction, SingleVariableGeneratingFunctionFixedLength)
 pub trait GeneratingFunction : Sized + Clone + Debug {
     /// The base value for NodeIndex::FALSE
     fn zero() -> Self;
@@ -70,6 +71,8 @@ impl <G:GeneratingFunction,I:Into<G>+Ord> GeneratingFunctionWithMultiplicity<I> 
 
 
 #[derive(Clone,Eq, PartialEq,Debug)]
+/// Measure the number of solutions of the diagram separated
+/// by the number of variables that are true in the solution.
 pub struct SingleVariableGeneratingFunction<E:Integer>(pub Vec<E>);
 
 impl <E:Clone+Eq+PartialEq+Debug+Clone+Integer+AddAssign> GeneratingFunction for SingleVariableGeneratingFunction<E> {
@@ -153,7 +156,8 @@ impl <E:Clone+Eq+PartialEq+Debug+Clone+Integer+AddAssign,M:Copy+Integer+TryInto<
 
 
 #[derive(Clone,Eq, PartialEq,Debug)]
-/// a generating function with a fixed maximum length
+/// a generating function with a fixed maximum length.
+/// Like SingleVariableGeneratingFunction but discard all values higher than a given size.
 pub struct SingleVariableGeneratingFunctionFixedLength<const L:usize>(pub Vec<u64>);
 
 impl <const L:usize> GeneratingFunction for SingleVariableGeneratingFunctionFixedLength<L> {
