@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 homepage = "https://github.com/AndrewConway/xdd"
 repository = "https://github.com/AndrewConway/xdd"
 readme = "README.md"
-keywords = ["bdd", "zdd", "boolean-expression", "set", "symbolic", "multiset"]
+keywords = ["bdd", "zdd", "boolean-expression", "set", "multiset"]
 categories = ["combinatorics", "data-structures", "science", "mathematics"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
