@@ -60,7 +60,9 @@ non-negative integer, such that (f∪g)(v0,v1,..vn) = f(v0,v1,..vn)+g(v0,v1,..vn
 A MZDD is the same except based on a ZDD rather than a BDD.
 
 An example application is in [examples/pap.rs](examples/pap.rs) which computes the number of
-permutations of length n that contain a given pattern p exactly k times for all k.
+permutations of length n that contain a given pattern p exactly k times for all k. A
+paper analyzing the results and describing the implementation of MBDDs and MZDDs
+[is included in this repository](theory_paper.pdf) or available on [archiv](https://arxiv.org/pdf/2306.12682.pdf).
 
 ## What is a πDD or a Rot-πDD
 
