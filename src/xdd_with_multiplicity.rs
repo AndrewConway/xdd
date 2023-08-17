@@ -476,6 +476,47 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
         writeln!(writer,"}}")?;
         Ok(())
     }
+
+    /// Determine the smallest number of variables that have to be true to make a node true, for nodes 0 inclusive to length exclusive.
+    ///
+    ///
+    /// This is easy because of the topological sort.
+    /// Return an array such that res[node] = the number of variables that are true to make the node true. usize::MAX means no solution.
+    fn all_shortest_solutions(&self,length:usize) -> Vec<usize> {
+        let mut res : Vec<usize> = Vec::new();
+        res.push(usize::MAX); // bottom node has no solutions
+        res.push(0); // top node is trivially solved.
+        for i in 2..length {
+            let node = self.node(i.try_into().map_err(|_|()).unwrap());
+            let lo = res[node.lo.address.as_usize()];
+            let hi = res[node.hi.address.as_usize()];
+            let current = if hi==usize::MAX { lo } else { lo.min( hi+1 )};
+            res.push(current);
+        }
+        res
+    }
+
+    fn find_satisfying_solution_with_minimum_number_of_variables(&self, index: NodeIndex<A, M>) -> Option<Vec<VariableIndex>> {
+        let work = self.all_shortest_solutions(index.address.as_usize()+1);
+        if work[work.len()-1]==usize::MAX { None } else {
+            let mut res = vec![];
+            let mut current_index = index.address;
+            while !current_index.is_sink() {
+                // work backwards through work.
+                let node = self.node(current_index);
+                let lo = work[node.lo.address.as_usize()];
+                let hi = work[node.hi.address.as_usize()];
+                if hi==usize::MAX || lo<=hi+1 { // lo node is best route
+                    current_index=node.lo.address;
+                } else {
+                    res.push(node.variable);
+                    current_index=node.hi.address;
+                }
+            }
+            Some(res)
+        }
+    }
+
 }
 
 

@@ -12,7 +12,7 @@
 
 pub mod generating_function;
 pub mod permutation_diagrams;
-pub(crate) mod xdd_with_multiplicity;
+pub mod xdd_with_multiplicity;
 pub mod util;
 pub mod permutation;
 
@@ -223,6 +223,18 @@ pub trait DecisionDiagramFactory<A:NodeAddress,M:Multiplicity> {
     /// * a slice of nodes and optional associated names for the start points of interest for the diagram. Often there is just one of these, but often more are useful.
     /// * a namer function from a VariableIndex to a String.
     fn make_dot_file<W:Write,F:Fn(VariableIndex)->String>(&self, writer:&mut W, name:impl Display, start_nodes:&[(NodeIndex<A,M>, Option<String>)], namer:F) -> std::io::Result<()>;
+
+
+    /// Find a set of boolean assignments to the variable that makes the result true (or non-zero in the case of multiplicities) if one exists.
+    ///
+    /// If multiple exist, choose the one with the fewest variables set to `true`.
+    ///
+    /// If multiple of those exist, choose the one not using variable 0, should it exist.
+    /// If multiple of those exist, choose the one not using variable 1, should it exist.
+    /// etc.
+    ///
+    /// If successful, return a vector of the used variables, sorted in ascending order.
+    fn find_satisfying_solution_with_minimum_number_of_variables(&self,index: NodeIndex<A,M>) -> Option<Vec<VariableIndex>>;
 }
 
 
@@ -294,6 +306,11 @@ impl <A:NodeAddress+Default,M:Multiplicity> DecisionDiagramFactory<A,M> for BDDF
         use xdd_with_multiplicity::XDDBase;
         self.nodes.make_dot_file(writer,name,start_nodes,namer)
     }
+
+    fn find_satisfying_solution_with_minimum_number_of_variables(&self, index: NodeIndex<A, M>) -> Option<Vec<VariableIndex>> {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.find_satisfying_solution_with_minimum_number_of_variables(index)
+    }
 }
 
 /// A factory that can do efficient operations on BDDs.
@@ -364,6 +381,12 @@ impl <A:NodeAddress,M:Multiplicity> DecisionDiagramFactory<A,M> for ZDDFactory<A
         use xdd_with_multiplicity::XDDBase;
         self.nodes.make_dot_file(writer,name,start_nodes,namer)
     }
+
+    fn find_satisfying_solution_with_minimum_number_of_variables(&self, index: NodeIndex<A, M>) -> Option<Vec<VariableIndex>> {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.find_satisfying_solution_with_minimum_number_of_variables(index)
+    }
+
 }
 
 

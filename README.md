@@ -179,6 +179,15 @@ are the terminals. The numbers to the upper left of each ellipse are the node in
 If multiplicities are involved, edges will be labeled with the multiplicity. Dotted lines
 are taken if the given variable is false, full lines if the variable is true. 
 
+## Finding Solutions
+
+Finding a solution means finding an assignment to a set of variables that makes the function true.
+
+There are a variety of solution techniques available with xDDs, of which I intend to implement some.
+
+Currently, the only function is to compute an exemplar solution using the minimum number of variables.
+This can be used to solve a variety of optimization problems.
+
 ## Future
 
 The number of variables is currently a u16. I considered making this generic, although
@@ -190,7 +199,7 @@ I will listen to requests.
 
 ## License
 
-Copyright 2022 Andrew Conway.
+Copyright 2022-2023 Andrew Conway.
 
 Licensed under either of
 

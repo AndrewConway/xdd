@@ -1,6 +1,6 @@
 [package]
 name = "xdd"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Andrew Conway <arcgit@greatcactus.org>"]
 description = "Decision diagrams including BDD, ZDD, MBDD, πDD and more for combinatorics."
