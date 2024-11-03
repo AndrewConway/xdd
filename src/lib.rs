@@ -313,6 +313,18 @@ impl <A:NodeAddress+Default,M:Multiplicity> DecisionDiagramFactory<A,M> for BDDF
     }
 }
 
+impl <A:NodeAddress+Default,M:Multiplicity> BDDFactory<A,M> {
+    /// Produce a BDD which is true iff exactly n of the given variables is true, regardless of other variables.
+    /// The variables array must be sorted, smallest to highest.
+    ///
+    /// The intention is to put this into DecisionDiagramFactory when a similar one is done for ZDDs.
+    pub fn exactly_n_of(&mut self,n:usize, variables: &[VariableIndex]) -> NodeIndex<A,M> {
+        use xdd_with_multiplicity::XDDBase;
+        let mut cache = HashMap::new();
+        self.nodes.exactly_n_of_bdd(n,variables,&mut cache)
+    }
+}
+
 /// A factory that can do efficient operations on BDDs.
 pub struct ZDDFactory<A:NodeAddress,M:Multiplicity> {
     nodes : xdd_with_multiplicity::NodeListWithFastLookup<A,M>,

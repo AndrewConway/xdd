@@ -80,6 +80,24 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
         }
     }
 
+    /// Produce a BDD which is true iff exactly n of the given variables is true, regardless of other variables.
+    /// The variables array must be sorted, smallest to highest.
+    fn exactly_n_of_bdd(&mut self,n:usize,variables:&[VariableIndex],cache:&mut HashMap<(usize,usize),NodeIndex<A,M>>) -> NodeIndex<A,M> {
+        if n>variables.len() { NodeIndex::FALSE }
+        else if variables.len()==0 { return NodeIndex::TRUE }
+        else if let Some(existing) = cache.get(&(n,variables.len()))  { *existing  }
+        else {
+            // deal with first variable being true
+            let hi = if n>0 {self.exactly_n_of_bdd(n-1,&variables[1..],cache)} else {NodeIndex::FALSE};
+            // deal with first variable being false
+            let lo = self.exactly_n_of_bdd(n,&variables[1..],cache);
+            let res = if lo==hi {lo} else {self.add_node_if_not_present(Node {variable:variables[0],lo,hi})};
+            cache.insert((n,variables.len()),res);
+            res
+        }
+    }
+
+
     fn zdd_variables_in_range_dont_matter(&mut self, base: NodeIndex<A,M>, range:Range<u16>) -> NodeIndex<A,M> {
         let mut res = base;
         for v in range.rev() {
@@ -485,7 +503,7 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
     fn all_shortest_solutions(&self,length:usize) -> Vec<usize> {
         let mut res : Vec<usize> = Vec::new();
         res.push(usize::MAX); // bottom node has no solutions
-        res.push(0); // top node is trivially solved.
+        if length>1 {res.push(0);} // top node is trivially solved.
         for i in 2..length {
             let node = self.node(i.try_into().map_err(|_|()).unwrap());
             let lo = res[node.lo.address.as_usize()];
