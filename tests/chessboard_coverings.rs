@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::mem;
 use xdd::{BDDFactory, DecisionDiagramFactory, NodeIndex, NoMultiplicity, VariableIndex, ZDDFactory};
 
 type Site = [usize;2];
@@ -125,6 +126,37 @@ fn count_dominoes_zdd() {
     let solutions = count_tiling::<ZDDFactory<u32,NoMultiplicity>>(setup_chessboard_tiled_with_dominoes(8));
     assert_eq!(solutions,12988816); // See Knuth, "The art of Computer programming Volume 4, Fascicle 1, Binary Decision Diagrams", section 7.1.4, p119
 }
+
+
+#[test]
+fn count_dominoes_dynamic_programming() {
+    let mut input_buffer = vec![0u128;256];
+    let mut output_buffer = vec![0u128;256];
+    input_buffer[0]=1;
+    for y in 0..8 {
+        for x in 0..8 {
+            let mask : usize = 1<<x;
+            for i in 0..256 {
+                let already_occupied = (i&mask)!=0;
+                let count = input_buffer[i];
+                if already_occupied {
+                    output_buffer[i-mask]+=count;
+                } else {
+                    // domino downwards
+                    output_buffer[i+mask]+=count;
+                    // domino right
+                    if x<7 && i&(mask<<1) == 0 { output_buffer[i+(mask<<1)]+=count}
+                }
+                input_buffer[i]=0;
+            }
+            mem::swap(&mut input_buffer,&mut output_buffer);
+        }
+    }
+    let solutions = input_buffer[0];
+    println!("DP tiling solutions : {solutions}");
+    assert_eq!(solutions,12988816); // See Knuth, "The art of Computer programming Volume 4, Fascicle 1, Binary Decision Diagrams", section 7.1.4, p119
+}
+
 
 #[test]
 fn count_up_to_trionimoes_bdd() {
