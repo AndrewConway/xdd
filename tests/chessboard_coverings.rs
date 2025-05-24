@@ -8,6 +8,10 @@ type Tile = Vec<SiteIndex>;
 type TileIndex = usize;
 
 #[derive(Default)]
+/// A worker to make it straight forward to set up a tiling problem:
+/// * Add all sites with add_site
+/// * Add all times with add_tile or add_tile_containing_sites
+/// * call find_tiling_solution to get an xDD whose solutions have each site covered by exactly one tile.
 struct TilingProblem {
     sites : Vec<Site>,
     site_index_by_site : HashMap<Site,SiteIndex>,
@@ -133,7 +137,7 @@ fn count_dominoes_dynamic_programming() {
     let mut input_buffer = vec![0u128;256];
     let mut output_buffer = vec![0u128;256];
     input_buffer[0]=1;
-    for y in 0..8 {
+    for _y in 0..8 {
         for x in 0..8 {
             let mask : usize = 1<<x;
             for i in 0..256 {
