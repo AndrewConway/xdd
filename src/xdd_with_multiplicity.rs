@@ -7,9 +7,12 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
 use std::io::Write;
+use std::marker::PhantomData;
 use std::ops::Range;
 use crate::{Node, NodeIndex, VariableIndex, NodeAddress, Multiplicity, NodeRenaming};
 use crate::generating_function::{GeneratingFunctionWithMultiplicity};
+
+
 
 /// Functions that any representation of an XDD must have, although some representations
 /// will execute this more quickly than others, at the cost of more memory capacity.
@@ -418,7 +421,7 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
 
     /// Create generating functions for nodes 0 inclusive to length exclusive.
     /// This is easy because of the topological sort.
-    /// Return an array such that res[node] = the variable used at the time and the generating function.
+    /// Return an array such that `res[node]` = the variable used at the time and the generating function.
     fn all_number_solutions<G:GeneratingFunctionWithMultiplicity<M>,const BDD:bool>(&self,length:usize,num_variables:u16) -> Vec<G> {
         let mut res = Vec::new();
         res.push(G::zero());
@@ -446,6 +449,24 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
         res
     }
 
+    /// Create generating functions for nodes 0 inclusive to length exclusive.
+    /// This is easy because of the topological sort.
+    /// 
+    /// Return a structure that could be used to select all solutions.
+    /// 
+    fn find_all_solutions<G: GeneratingFunctionWithMultiplicity<M>, const BDD: bool>(&self, index: NodeIndex<A, M>, num_variables:u16) -> SolutionFinder<A, M, Self, G, false> {
+        let num_solutions_by_node = self.all_number_solutions::<G,BDD>(index.address.as_usize()+1,num_variables);
+        SolutionFinder {
+            num_solutions_by_node,
+            number_of_variables_true_in_minimum_solution: vec![],
+            xdd: &self,
+            _phantom_a: Default::default(),
+            _phantom_m: Default::default(),
+            num_variables,
+            start_node_index: index,
+            is_bdd: BDD,
+        }
+    }
     fn number_solutions<G:GeneratingFunctionWithMultiplicity<M>,const BDD:bool>(&self, index: NodeIndex<A,M>, num_variables:u16) -> G {
         let work = self.all_number_solutions::<G,BDD>(index.address.as_usize()+1,num_variables);
         let found = work[index.address.as_usize()].clone();
@@ -537,7 +558,100 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
 
 }
 
+pub struct SolutionFinder<'a,A:NodeAddress,M:Multiplicity,XDD:XDDBase<A,M> + ?Sized,G:GeneratingFunctionWithMultiplicity<M>,const WANT_MIN_VARS:bool> {
+    num_solutions_by_node : Vec<G>,
+    /// * If we want all solutions, then empty. 
+    /// * If we only want solutions with the minimum number of variables true, then the best number of varaibles at each point (or usize::MAX if not defined)
+    number_of_variables_true_in_minimum_solution : Vec<usize>,
+    xdd : &'a XDD,
+    _phantom_a : PhantomData<A>,
+    _phantom_m : PhantomData<M>,
+    num_variables : u16,
+    start_node_index : NodeIndex<A, M>,
+    is_bdd:bool,
+}
 
+impl <'a,A:NodeAddress,M:Multiplicity,XDD:XDDBase<A,M>,G:GeneratingFunctionWithMultiplicity<M>,const WANT_MIN_VARS:bool> SolutionFinder<'a,A,M,XDD,G,WANT_MIN_VARS> {
+
+    fn number_solutions_starting_from_variable(&self,index:NodeIndex<A,M>, starting_variable:VariableIndex) -> G {
+        let found = self.num_solutions_by_node[index.address.as_usize()].clone();
+        let before_multiplicity = if self.is_bdd {
+            let level = if index.is_sink() { VariableIndex(self.num_variables) } else { self.xdd.node(index.address).variable };
+            found.deal_with_variable_range_being_indeterminate(starting_variable,level)
+        } else { found };
+        before_multiplicity.multiply(index.multiplicity)
+    }
+    
+    /// Compute the number of solutions. That is, the number of 
+    pub fn number_solutions(&self) -> G {
+        self.number_solutions_starting_from_variable(self.start_node_index,VariableIndex(0))
+    }
+    
+}
+
+impl <'a,A:NodeAddress,M:Multiplicity,XDD:XDDBase<A,M>,G:GeneratingFunctionWithMultiplicity<M> + Ord,const WANT_MIN_VARS:bool> SolutionFinder<'a,A,M,XDD,G,WANT_MIN_VARS> {
+
+    /// Get a solution to the problem as a list of variables that are true in the solution.
+    /// 
+    /// solution_index specifies WHICH of the solutions to return. 0<= solution_index<number_solutions.
+    /// If you were to write out a truth table, skip solution_index true results and get the next true result.
+    /// 
+    /// if solution_index<=number_solutions return the list, otherwise an error.
+    pub fn get_ith_solution(&self, solution_index:G) -> Option<Vec<VariableIndex>> {
+        if solution_index>=self.number_solutions() { return None; }
+        let mut current_index = self.start_node_index;
+        let mut res = vec![];
+        let mut bypassed : G = G::zero(); // the number of solutions before the point we are at. Should always be <=solution_index.
+        let mut scale : M = M::ONE; // multiply the number on left by this.
+        let mut up_to_variable = VariableIndex(0);
+        loop {
+            // work backwards through work.
+            scale = M::multiply(scale,current_index.multiplicity);
+            if self.is_bdd && !WANT_MIN_VARS {
+                let mut num_here = self.num_solutions_by_node[current_index.address.as_usize()].clone().multiply(scale);
+                let mut num_here_doubling = vec![];
+                let end_variable_index = if current_index.is_sink() { VariableIndex(self.num_variables) } else { self.xdd.node(current_index.address).variable };
+                for i in (up_to_variable.0..end_variable_index.0).rev() {
+                    num_here_doubling.push(num_here.clone());
+                    num_here=num_here.deal_with_variable_being_indeterminate(VariableIndex(i));
+                }
+                for i in up_to_variable.0..end_variable_index.0 {
+                    let num_in_question = num_here_doubling.pop().unwrap();
+                    let bypassed_if_i_true = bypassed.clone().add(num_in_question.clone());
+                    if bypassed_if_i_true<=solution_index {
+                        bypassed=bypassed_if_i_true;
+                        res.push(VariableIndex(i));
+                    }
+                }
+                up_to_variable = VariableIndex(end_variable_index.0+1);
+            }
+            assert!(bypassed<=solution_index);
+            assert!(bypassed.clone().add(self.num_solutions_by_node[current_index.address.as_usize()].clone().multiply(scale))>solution_index);
+            if current_index.is_sink() { break; }
+            let node = self.xdd.node(current_index.address);
+            // if we are constrained by wanting the minimum number of variables, then we may not be able to go left.
+            let could_go_left = (!WANT_MIN_VARS) || {
+                let lo = self.number_of_variables_true_in_minimum_solution[node.lo.address.as_usize()];
+                let hi = self.number_of_variables_true_in_minimum_solution[node.hi.address.as_usize()];
+                hi==usize::MAX || lo<=hi+1
+            };
+            // if we can go left, then do go left depending on the number of solutions to the left and i.
+            let will_go_left = if could_go_left {
+                let num_on_left = self.number_solutions_starting_from_variable(node.lo,up_to_variable).multiply(scale);
+                let bypassed_if_choose_right = bypassed.clone().add(num_on_left);
+                if bypassed_if_choose_right<=solution_index {
+                    bypassed = bypassed_if_choose_right;
+                    false
+                } else { true }
+            } else {false};
+            let new_index = if will_go_left { node.lo } else { res.push(node.variable); node.hi };
+            current_index=new_index;
+        }
+        assert!(current_index.is_true());
+        Some(res)
+    }
+
+}
 
 /// A list of all the nodes.
 /// This is a compact representation of nodes that is all that is needed to serialize/deserialize,

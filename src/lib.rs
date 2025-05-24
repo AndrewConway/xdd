@@ -23,6 +23,7 @@ use std::io::Write;
 use std::ops::Rem;
 use num::{Integer, Unsigned, Zero};
 use crate::generating_function::GeneratingFunctionWithMultiplicity;
+use crate::xdd_with_multiplicity::SolutionFinder;
 
 /// The identifier of a variable. Variable 0 is the highest one in the diagram.
 #[derive(Copy, Clone,Eq, PartialEq,Hash,Ord, PartialOrd,Debug)]
@@ -194,6 +195,21 @@ pub trait DecisionDiagramFactory<A:NodeAddress,M:Multiplicity> {
     fn not(&mut self, index: NodeIndex<A,M>) -> NodeIndex<A,M>;
     /// Enumerate the solutions to the given generating function.
     fn number_solutions<G:GeneratingFunctionWithMultiplicity<M>>(&self, index: NodeIndex<A,M>) -> G;
+    /// A more powerful version of number_solutions that can list said solutions or find arbitrary ones. 
+    /// ```
+    /// use xdd::{ZDDFactory, DecisionDiagramFactory, NoMultiplicity, VariableIndex};
+    /// let mut factory = ZDDFactory::<u32,NoMultiplicity>::new(2);
+    /// let v0 = factory.single_variable(VariableIndex(0));
+    /// // we have made a function that is true iff v0 is true, there is one other irrelevant 
+    /// // variable v1, so there should be 2 solutions.
+    /// let solutions_where_v0_is_true = factory.find_all_solutions::<u64>(v0,2);
+    /// assert_eq!(2,solutions_where_v0_is_true.number_solutions());
+    /// // solutions are listed by the lexicographic order that they would be in a truth table
+    /// assert_eq!(Some(vec![VariableIndex(0)]),solutions_where_v0_is_true.get_ith_solution(0));
+    /// assert_eq!(Some(vec![VariableIndex(0),VariableIndex(1)]),solutions_where_v0_is_true.get_ith_solution(1));
+    /// assert_eq!(None,solutions_where_v0_is_true.get_ith_solution(2));
+    /// ```
+    fn find_all_solutions<G: GeneratingFunctionWithMultiplicity<M>>(&self, index: NodeIndex<A, M>, num_variables:u16) -> SolutionFinder<A, M, xdd_with_multiplicity::NodeListWithFastLookup<A,M>, G, false>;
     /// Produce a DD that describes a single variable. That is, a DD that has all variables having no effect other than just that variable leading to TRUE iff variable is true.
     fn single_variable(&mut self,variable:VariableIndex) -> NodeIndex<A,M>;
     /// Get the number of nodes in the DD.
@@ -235,6 +251,7 @@ pub trait DecisionDiagramFactory<A:NodeAddress,M:Multiplicity> {
     ///
     /// If successful, return a vector of the used variables, sorted in ascending order.
     fn find_satisfying_solution_with_minimum_number_of_variables(&self,index: NodeIndex<A,M>) -> Option<Vec<VariableIndex>>;
+
 }
 
 
@@ -277,6 +294,11 @@ impl <A:NodeAddress+Default,M:Multiplicity> DecisionDiagramFactory<A,M> for BDDF
     fn number_solutions<G: GeneratingFunctionWithMultiplicity<M>>(&self, index: NodeIndex<A,M>) -> G {
         use xdd_with_multiplicity::XDDBase;
         self.nodes.number_solutions::<G,true>(index,self.num_variables)
+    }
+
+    fn find_all_solutions<G: GeneratingFunctionWithMultiplicity<M>>(&self, index: NodeIndex<A, M>, num_variables:u16) -> SolutionFinder<A, M, xdd_with_multiplicity::NodeListWithFastLookup<A,M>, G, false> {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.find_all_solutions::<G,true>(index,num_variables)        
     }
 
     fn single_variable(&mut self, variable: VariableIndex) -> NodeIndex<A,M> {
@@ -365,6 +387,12 @@ impl <A:NodeAddress,M:Multiplicity> DecisionDiagramFactory<A,M> for ZDDFactory<A
         use xdd_with_multiplicity::XDDBase;
         self.nodes.number_solutions::<G,false>(index,self.num_variables)
     }
+
+    fn find_all_solutions<G: GeneratingFunctionWithMultiplicity<M>>(&self, index: NodeIndex<A, M>, num_variables:u16) -> SolutionFinder<A, M, xdd_with_multiplicity::NodeListWithFastLookup<A,M>, G, false> {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.find_all_solutions::<G,false>(index,num_variables)
+    }
+
 
     fn single_variable(&mut self, variable: VariableIndex) -> NodeIndex<A,M> {
         use xdd_with_multiplicity::XDDBase;

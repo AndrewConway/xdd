@@ -78,6 +78,37 @@ fn zdd_basic_ops<F:XDDBase<usize, NoMultiplicity>+Default>() {
     assert_eq!(2,factory.number_solutions_zdd::<u64>(not_v0,2));
     assert_eq!(1,factory.number_solutions_zdd::<u64>(and_v0_v1,2));
     assert_eq!(3,factory.number_solutions_zdd::<u64>(or_v0_v1,2));
+    // check more sophisticated enumerations
+    let all_solutions_v1 = factory.find_all_solutions::<u64, false>(v1, 2);
+    assert_eq!(2,all_solutions_v1.number_solutions());
+    assert_eq!(Some(vec![VariableIndex(1)]),all_solutions_v1.get_ith_solution(0));
+    assert_eq!(Some(vec![VariableIndex(0),VariableIndex(1)]),all_solutions_v1.get_ith_solution(1));
+    assert_eq!(None,all_solutions_v1.get_ith_solution(2));
+    assert_eq!(None,all_solutions_v1.get_ith_solution(42));
+    let all_solutions_v0 = factory.find_all_solutions::<u64, false>(v0, 2);
+    assert_eq!(2,all_solutions_v0.number_solutions());
+    assert_eq!(Some(vec![VariableIndex(0)]),all_solutions_v0.get_ith_solution(0));
+    assert_eq!(Some(vec![VariableIndex(0),VariableIndex(1)]),all_solutions_v0.get_ith_solution(1));
+    assert_eq!(None,all_solutions_v0.get_ith_solution(2));
+    assert_eq!(None,all_solutions_v0.get_ith_solution(42));
+    let all_solutions_not_v0 = factory.find_all_solutions::<u64, false>(not_v0, 2);
+    assert_eq!(2,all_solutions_not_v0.number_solutions());
+    assert_eq!(Some(vec![]),all_solutions_not_v0.get_ith_solution(0));
+    assert_eq!(Some(vec![VariableIndex(1)]),all_solutions_not_v0.get_ith_solution(1));
+    assert_eq!(None,all_solutions_not_v0.get_ith_solution(2));
+    assert_eq!(None,all_solutions_not_v0.get_ith_solution(42));
+    let all_solutions_or_v0_v1 = factory.find_all_solutions::<u64, false>(or_v0_v1, 2);
+    assert_eq!(3,all_solutions_or_v0_v1.number_solutions());
+    assert_eq!(Some(vec![VariableIndex(1)]),all_solutions_or_v0_v1.get_ith_solution(0));
+    assert_eq!(Some(vec![VariableIndex(0)]),all_solutions_or_v0_v1.get_ith_solution(1));
+    assert_eq!(Some(vec![VariableIndex(0),VariableIndex(1)]),all_solutions_or_v0_v1.get_ith_solution(2));
+    assert_eq!(None,all_solutions_or_v0_v1.get_ith_solution(3));
+    assert_eq!(None,all_solutions_or_v0_v1.get_ith_solution(42));
+    let all_solutions_and_v0_v1 = factory.find_all_solutions::<u64, false>(and_v0_v1, 2);
+    assert_eq!(1,all_solutions_and_v0_v1.number_solutions());
+    assert_eq!(Some(vec![VariableIndex(0),VariableIndex(1)]),all_solutions_and_v0_v1.get_ith_solution(0));
+    assert_eq!(None,all_solutions_and_v0_v1.get_ith_solution(1));
+    assert_eq!(None,all_solutions_and_v0_v1.get_ith_solution(42));
 
     assert_eq!(SingleVariableGeneratingFunction(vec![1]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndex::TRUE, 2));
     assert_eq!(SingleVariableGeneratingFunction(vec![]),factory.number_solutions_zdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndex::FALSE, 2));
@@ -307,6 +338,38 @@ fn bdd_basic_ops<F:XDDBase<usize, NoMultiplicity>+Default>() {
     assert_eq!(3,factory.number_solutions_bdd::<u64>(or_v0_v1,2));
     assert_eq!(3,factory.number_solutions_bdd::<u64>(not_and_v0_v1,2));
     //assert_eq!(3,factory.number_solutions_bdd::<u64>(or_v0_v1,2));
+    // check more sophisticated enumerations
+    let all_solutions_v1 = factory.find_all_solutions::<u64, true>(v1, 2);
+    assert_eq!(2,all_solutions_v1.number_solutions());
+    assert_eq!(Some(vec![VariableIndex(1)]),all_solutions_v1.get_ith_solution(0));
+    assert_eq!(Some(vec![VariableIndex(0),VariableIndex(1)]),all_solutions_v1.get_ith_solution(1));
+    assert_eq!(None,all_solutions_v1.get_ith_solution(2));
+    assert_eq!(None,all_solutions_v1.get_ith_solution(42));
+    let all_solutions_v0 = factory.find_all_solutions::<u64, true>(v0, 2);
+    assert_eq!(2,all_solutions_v0.number_solutions());
+    assert_eq!(Some(vec![VariableIndex(0)]),all_solutions_v0.get_ith_solution(0));
+    assert_eq!(Some(vec![VariableIndex(0),VariableIndex(1)]),all_solutions_v0.get_ith_solution(1));
+    assert_eq!(None,all_solutions_v0.get_ith_solution(2));
+    assert_eq!(None,all_solutions_v0.get_ith_solution(42));
+    let all_solutions_not_v0 = factory.find_all_solutions::<u64, true>(not_v0, 2);
+    assert_eq!(2,all_solutions_not_v0.number_solutions());
+    assert_eq!(Some(vec![]),all_solutions_not_v0.get_ith_solution(0));
+    assert_eq!(Some(vec![VariableIndex(1)]),all_solutions_not_v0.get_ith_solution(1));
+    assert_eq!(None,all_solutions_not_v0.get_ith_solution(2));
+    assert_eq!(None,all_solutions_not_v0.get_ith_solution(42));
+    let all_solutions_or_v0_v1 = factory.find_all_solutions::<u64, true>(or_v0_v1, 2);
+    assert_eq!(3,all_solutions_or_v0_v1.number_solutions());
+    assert_eq!(Some(vec![VariableIndex(1)]),all_solutions_or_v0_v1.get_ith_solution(0));
+    assert_eq!(Some(vec![VariableIndex(0)]),all_solutions_or_v0_v1.get_ith_solution(1));
+    assert_eq!(Some(vec![VariableIndex(0),VariableIndex(1)]),all_solutions_or_v0_v1.get_ith_solution(2));
+    assert_eq!(None,all_solutions_or_v0_v1.get_ith_solution(3));
+    assert_eq!(None,all_solutions_or_v0_v1.get_ith_solution(42));
+    let all_solutions_and_v0_v1 = factory.find_all_solutions::<u64, true>(and_v0_v1, 2);
+    assert_eq!(1,all_solutions_and_v0_v1.number_solutions());
+    assert_eq!(Some(vec![VariableIndex(0),VariableIndex(1)]),all_solutions_and_v0_v1.get_ith_solution(0));
+    assert_eq!(None,all_solutions_and_v0_v1.get_ith_solution(1));
+    assert_eq!(None,all_solutions_and_v0_v1.get_ith_solution(42));
+
 
     assert_eq!(SingleVariableGeneratingFunction(vec![1,2,1]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndex::TRUE, 2));
     assert_eq!(SingleVariableGeneratingFunction(vec![]),factory.number_solutions_bdd::<SingleVariableGeneratingFunction::<u64>>(NodeIndex::FALSE, 2));

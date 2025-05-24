@@ -20,7 +20,7 @@ use std::marker::PhantomData;
 use std::ops::{Div, Index, MulAssign};
 use num::Num;
 use crate::{DecisionDiagramFactory, Node, NodeIndex, NodeRenaming, VariableIndex, ZDDFactory, NodeAddress, Multiplicity, GeneratingFunctionWithMultiplicity};
-use crate::permutation::PermutedItem;
+pub use crate::permutation::PermutedItem;
 use crate::xdd_with_multiplicity::XDDBase;
 
 
