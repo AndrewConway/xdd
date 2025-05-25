@@ -23,7 +23,7 @@ use std::io::Write;
 use std::ops::Rem;
 use num::{Integer, Unsigned, Zero};
 use crate::generating_function::GeneratingFunctionWithMultiplicity;
-use crate::xdd_with_multiplicity::SolutionFinder;
+use crate::xdd_with_multiplicity::{SolutionFinder};
 
 /// The identifier of a variable. Variable 0 is the highest one in the diagram.
 #[derive(Copy, Clone,Eq, PartialEq,Hash,Ord, PartialOrd,Debug)]
@@ -210,6 +210,24 @@ pub trait DecisionDiagramFactory<A:NodeAddress,M:Multiplicity> {
     /// assert_eq!(None,solutions_where_v0_is_true.get_ith_solution(2));
     /// ```
     fn find_all_solutions<G: GeneratingFunctionWithMultiplicity<M>>(&self, index: NodeIndex<A, M>, num_variables:u16) -> SolutionFinder<A, M, xdd_with_multiplicity::NodeListWithFastLookup<A,M>, G, false>;
+    /// Like find_all_solutions, but only find the best (or equal best) solution where "best"
+    /// means has the fewest number of true variables as arguments.
+    /// 
+    /// ```
+    /// use xdd::{ZDDFactory, DecisionDiagramFactory, NoMultiplicity, VariableIndex};
+    /// let mut factory = ZDDFactory::<u32,NoMultiplicity>::new(2);
+    /// let v0 = factory.single_variable(VariableIndex(0));
+    /// // we have made a function that is true iff v0 is true, there is one other irrelevant 
+    /// // variable v1, so there should be 2 solutions. But only the one with v1=false is minimal,
+    /// // so only 1 solutions comes up here.
+    /// let solutions_where_v0_is_true = factory.find_all_solutions_with_minimal_true_arguments::<u64>(v0,2);
+    /// assert_eq!(1,solutions_where_v0_is_true.number_solutions());
+    /// // solutions are listed by the lexicographic order that they would be in a truth table
+    /// assert_eq!(Some(vec![VariableIndex(0)]),solutions_where_v0_is_true.get_ith_solution(0));
+    /// assert_eq!(None,solutions_where_v0_is_true.get_ith_solution(1));
+    /// ```
+    fn find_all_solutions_with_minimal_true_arguments<G: GeneratingFunctionWithMultiplicity<M>>(&self, index: NodeIndex<A, M>, num_variables:u16) -> SolutionFinder<A, M, xdd_with_multiplicity::NodeListWithFastLookup<A,M>, G, true>;
+    
     /// Produce a DD that describes a single variable. That is, a DD that has all variables having no effect other than just that variable leading to TRUE iff variable is true.
     fn single_variable(&mut self,variable:VariableIndex) -> NodeIndex<A,M>;
     /// Get the number of nodes in the DD.
@@ -299,6 +317,11 @@ impl <A:NodeAddress+Default,M:Multiplicity> DecisionDiagramFactory<A,M> for BDDF
     fn find_all_solutions<G: GeneratingFunctionWithMultiplicity<M>>(&self, index: NodeIndex<A, M>, num_variables:u16) -> SolutionFinder<A, M, xdd_with_multiplicity::NodeListWithFastLookup<A,M>, G, false> {
         use xdd_with_multiplicity::XDDBase;
         self.nodes.find_all_solutions::<G,true>(index,num_variables)        
+    }
+
+    fn find_all_solutions_with_minimal_true_arguments<G: GeneratingFunctionWithMultiplicity<M>>(&self, index: NodeIndex<A, M>, num_variables:u16) -> SolutionFinder<A, M, xdd_with_multiplicity::NodeListWithFastLookup<A,M>, G, true> {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.find_all_solutions_with_minimal_true_arguments::<G,true>(index,num_variables)
     }
 
     fn single_variable(&mut self, variable: VariableIndex) -> NodeIndex<A,M> {
@@ -393,6 +416,10 @@ impl <A:NodeAddress,M:Multiplicity> DecisionDiagramFactory<A,M> for ZDDFactory<A
         self.nodes.find_all_solutions::<G,false>(index,num_variables)
     }
 
+    fn find_all_solutions_with_minimal_true_arguments<G: GeneratingFunctionWithMultiplicity<M>>(&self, index: NodeIndex<A, M>, num_variables:u16) -> SolutionFinder<A, M, xdd_with_multiplicity::NodeListWithFastLookup<A,M>, G, true> {
+        use xdd_with_multiplicity::XDDBase;
+        self.nodes.find_all_solutions_with_minimal_true_arguments::<G,false>(index,num_variables)
+    }
 
     fn single_variable(&mut self, variable: VariableIndex) -> NodeIndex<A,M> {
         use xdd_with_multiplicity::XDDBase;

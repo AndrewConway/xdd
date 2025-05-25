@@ -516,6 +516,59 @@ pub trait XDDBase<A:NodeAddress,M:Multiplicity> {
         Ok(())
     }
 
+    /// Like find_all_solutions() except only produce those solutions that have a minimal
+    /// number of the input arguments be true.
+    ///
+    /// That is, if f(a,b) = a or b, then find_all_solutions() will return `a`, `b` and `a,b` whereas
+    /// this will just return `a` and `b`.
+    ///
+    /// Return a structure that could be used to select all solutions.
+    ///
+    fn find_all_solutions_with_minimal_true_arguments<G: GeneratingFunctionWithMultiplicity<M>, const BDD: bool>(&self, index: NodeIndex<A, M>, num_variables:u16) -> SolutionFinder<A, M, Self, G, true> {
+        let length = index.address.as_usize()+1;
+        let mut num_solutions_by_node = vec![G::zero(),G::one()]; // bottom node has no solutions, top node has 1.
+        let mut number_of_variables_true_in_minimum_solution : Vec<usize> = vec![usize::MAX,0]; // bottom node has no solutions, top node is trivially solved.
+        for i in 2..length {
+            let node = self.node(i.try_into().map_err(|_|()).unwrap());
+            let number_of_variables_lo = number_of_variables_true_in_minimum_solution[node.lo.address.as_usize()];
+            let number_of_variables_hi = number_of_variables_true_in_minimum_solution[node.hi.address.as_usize()];
+            let number_of_variables_here = if number_of_variables_hi==usize::MAX { number_of_variables_lo } else { number_of_variables_lo.min( number_of_variables_hi+1 )};
+            number_of_variables_true_in_minimum_solution.push(number_of_variables_here);
+            let use_lo = number_of_variables_lo==number_of_variables_here;
+            let use_hi = number_of_variables_hi!=usize::MAX && number_of_variables_hi+1==number_of_variables_here;
+            // let next_variable = VariableIndex(node.variable.0+1);
+            //println!("Computing {} lo={} hi={} variable={}",i,node.lo,node.hi,node.variable);
+            let lo = if use_lo {
+                let lo_g = num_solutions_by_node[node.lo.address.as_usize()].clone();
+                let lo_g = if M::MULTIPLICITIES_IRRELEVANT || node.lo.multiplicity.is_unity() { lo_g } else { lo_g.multiply(node.lo.multiplicity) };
+                // let lo_level = if node.lo.is_sink() { VariableIndex(num_variables) } else { self.node(node.lo.address).variable };
+                //println!("   lo_g={:?}, lo_level={}",lo_g,lo_level);
+                let lo = lo_g; // if BDD {lo_g.deal_with_variable_range_being_indeterminate(next_variable,lo_level)} else {lo_g};
+                lo.variable_not_set(node.variable)
+            } else { G::zero() };
+            let hi = if use_hi {
+                let hi_g = num_solutions_by_node[node.hi.address.as_usize()].clone();
+                let hi_g = if M::MULTIPLICITIES_IRRELEVANT || node.hi.multiplicity.is_unity() { hi_g } else { hi_g.multiply(node.hi.multiplicity) };
+                // let hi_level = if node.hi.is_sink() { VariableIndex(num_variables) } else { self.node(node.hi.address).variable };
+                //println!("   hi_g={:?}, hi_level={}",hi_g,hi_level);
+                let hi = hi_g; // if BDD {hi_g.deal_with_variable_range_being_indeterminate(next_variable,hi_level)} else {hi_g};
+                hi.variable_set(node.variable)
+            } else {G::zero()};
+            //println!(" GF lo = {:?},   GF hi = {:?}",lo,hi);
+            num_solutions_by_node.push(lo.add(hi));
+        }
+        SolutionFinder {
+            num_solutions_by_node,
+            number_of_variables_true_in_minimum_solution,
+            xdd: &self,
+            _phantom_a: Default::default(),
+            _phantom_m: Default::default(),
+            num_variables,
+            start_node_index: index,
+            is_bdd: BDD,
+        }
+    }
+
     /// Determine the smallest number of variables that have to be true to make a node true, for nodes 0 inclusive to length exclusive.
     ///
     ///
@@ -575,7 +628,7 @@ impl <'a,A:NodeAddress,M:Multiplicity,XDD:XDDBase<A,M>,G:GeneratingFunctionWithM
 
     fn number_solutions_starting_from_variable(&self,index:NodeIndex<A,M>, starting_variable:VariableIndex) -> G {
         let found = self.num_solutions_by_node[index.address.as_usize()].clone();
-        let before_multiplicity = if self.is_bdd {
+        let before_multiplicity = if self.is_bdd && !WANT_MIN_VARS {
             let level = if index.is_sink() { VariableIndex(self.num_variables) } else { self.xdd.node(index.address).variable };
             found.deal_with_variable_range_being_indeterminate(starting_variable,level)
         } else { found };
@@ -626,7 +679,7 @@ impl <'a,A:NodeAddress,M:Multiplicity,XDD:XDDBase<A,M>,G:GeneratingFunctionWithM
                 up_to_variable = VariableIndex(end_variable_index.0+1);
             }
             assert!(bypassed<=solution_index);
-            assert!(bypassed.clone().add(self.num_solutions_by_node[current_index.address.as_usize()].clone().multiply(scale))>solution_index);
+            assert!(bypassed.clone().add(self.num_solutions_by_node[current_index.address.as_usize()].clone().multiply(scale))>solution_index); // ,"{bypassed}+{}<=solution_index={solution_index}",self.num_solutions_by_node[current_index.address.as_usize()].clone().multiply(scale));
             if current_index.is_sink() { break; }
             let node = self.xdd.node(current_index.address);
             // if we are constrained by wanting the minimum number of variables, then we may not be able to go left.
@@ -635,6 +688,7 @@ impl <'a,A:NodeAddress,M:Multiplicity,XDD:XDDBase<A,M>,G:GeneratingFunctionWithM
                 let hi = self.number_of_variables_true_in_minimum_solution[node.hi.address.as_usize()];
                 hi==usize::MAX || lo<=hi+1
             };
+            //println!("Node {} bypassed={bypassed} left={could_go_left} left={} right={}",current_index.address.as_usize(),self.number_solutions_starting_from_variable(node.lo,up_to_variable),self.number_solutions_starting_from_variable(node.hi,up_to_variable));
             // if we can go left, then do go left depending on the number of solutions to the left and i.
             let will_go_left = if could_go_left {
                 let num_on_left = self.number_solutions_starting_from_variable(node.lo,up_to_variable).multiply(scale);
@@ -644,6 +698,7 @@ impl <'a,A:NodeAddress,M:Multiplicity,XDD:XDDBase<A,M>,G:GeneratingFunctionWithM
                     false
                 } else { true }
             } else {false};
+            //if will_go_left {println!("will go left");} else { println!("will go right"); }
             let new_index = if will_go_left { node.lo } else { res.push(node.variable); node.hi };
             current_index=new_index;
         }
