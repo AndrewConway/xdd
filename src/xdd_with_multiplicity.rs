@@ -3,6 +3,9 @@
 //! Where XDDs represent a set, the equivalent version with multiplicities represents a multiset.
 //!
 
+/// Copyright 2022-2025 Andrew Conway. All rights reserved. See README.md for licensing. 
+
+
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;

@@ -199,7 +199,7 @@ I will listen to requests.
 
 ## License
 
-Copyright 2022-2023 Andrew Conway.
+Copyright 2022-2025 Andrew Conway.
 
 Licensed under either of
 

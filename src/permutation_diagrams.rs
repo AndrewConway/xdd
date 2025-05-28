@@ -10,6 +10,8 @@
 //! Doctor of Info. Sciences thesis, Hokkaido University, (2017).](https://eprints.lib.hokudai.ac.jp/dspace/handle/2115/65366?locale=en&lang=en)
 //!
 
+/// Copyright 2022-2025 Andrew Conway. All rights reserved. See README.md for licensing. 
+
 
 use std::collections::HashMap;
 

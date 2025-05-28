@@ -9,6 +9,8 @@
 //! It supports 16 bits for variables and 32 bits for pointers, limiting it to trees of 4 billion nodes.
 //! This may be changed in a newer version to a larger number.
 //!
+//! 
+/// Copyright 2022-2025 Andrew Conway. All rights reserved. See README.md for licensing. 
 
 pub mod generating_function;
 pub mod permutation_diagrams;

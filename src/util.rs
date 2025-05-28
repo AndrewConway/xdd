@@ -1,3 +1,5 @@
+/// Copyright 2022-2025 Andrew Conway. All rights reserved. See README.md for licensing. 
+
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::RangeInclusive;

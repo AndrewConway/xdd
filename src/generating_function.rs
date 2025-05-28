@@ -1,3 +1,6 @@
+/// Copyright 2022-2025 Andrew Conway. All rights reserved. See README.md for licensing. 
+
+
 use std::fmt::Debug;
 use std::ops::{AddAssign, Mul, MulAssign};
 use num::Integer;
